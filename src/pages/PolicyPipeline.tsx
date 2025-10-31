@@ -1,4 +1,6 @@
 import { ReactNode, useMemo, useState } from "react";
+import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
+import type { DocumentAttachment } from "../components/UploadModal";
 
 type PipelineCase = {
   id: string;
@@ -86,6 +88,21 @@ export default function PolicyPipeline() {
   const [stageFilter, setStageFilter] = useState<string>("todos");
   const [search, setSearch] = useState("");
   const [showOnlyOpenClaims, setShowOnlyOpenClaims] = useState(false);
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
+  const [attachmentsByCase, setAttachmentsByCase] = useState<
+    Record<string, DocumentAttachment[]>
+  >({});
+
+  const documentCategories = DEFAULT_DOCUMENT_CATEGORIES;
+
+  const categoryLabels = useMemo(
+    () =>
+      documentCategories.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    [documentCategories]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -122,6 +139,18 @@ export default function PolicyPipeline() {
 
     return { total, byStage, withDocsPending, withClaims };
   }, []);
+
+  const closeModal = () => setActiveCaseId(null);
+
+  const handleConfirmAttachments = (files: DocumentAttachment[]) => {
+    if (!activeCaseId) return;
+    const caseId = activeCaseId;
+    setAttachmentsByCase((prev) => ({
+      ...prev,
+      [caseId]: files,
+    }));
+    setActiveCaseId(null);
+  };
 
   return (
     <div className="flex-1 flex flex-col gap-5">
@@ -197,6 +226,7 @@ export default function PolicyPipeline() {
                 <th className="px-4 py-3 font-semibold">Monto aprobado</th>
                 <th className="px-4 py-3 font-semibold">Notas</th>
                 <th className="px-4 py-3 font-semibold">Actualizado</th>
+                <th className="px-4 py-3 font-semibold">Documentos</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -226,11 +256,44 @@ export default function PolicyPipeline() {
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-sm">{item.observaciones ?? "—"}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">{item.actualizado}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-2">
+                      {attachmentsByCase[item.id]?.length ? (
+                        <ul className="space-y-1 text-xs text-slate-600">
+                          {attachmentsByCase[item.id].map((attachment, index) => (
+                            <li
+                              key={`${attachment.file.name}-${index}`}
+                              className="flex flex-wrap items-center gap-2"
+                            >
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                {categoryLabels[attachment.category] ?? attachment.category}
+                              </span>
+                              <span
+                                className="truncate text-slate-500"
+                                title={attachment.file.name}
+                              >
+                                {attachment.file.name}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-xs text-slate-400">Sin adjuntos</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCaseId(item.id)}
+                        className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                      >
+                        Gestionar adjuntos
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                     No hay casos que coincidan con los filtros aplicados.
                   </td>
                 </tr>
@@ -239,6 +302,14 @@ export default function PolicyPipeline() {
           </table>
         </div>
       </section>
+      <UploadModal
+        open={Boolean(activeCaseId)}
+        title="Adjuntar documentos"
+        categories={documentCategories}
+        initialFiles={activeCaseId ? attachmentsByCase[activeCaseId] ?? [] : []}
+        onClose={closeModal}
+        onConfirm={handleConfirmAttachments}
+      />
     </div>
   );
 }

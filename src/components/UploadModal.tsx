@@ -5,6 +5,14 @@ export type DocumentCategoryOption = {
   label: string;
 };
 
+export const DEFAULT_DOCUMENT_CATEGORIES: DocumentCategoryOption[] = [
+  { value: "contrato", label: "Contratos" },
+  { value: "poliza", label: "Pólizas" },
+  { value: "factura", label: "Facturas" },
+  { value: "imagen", label: "Imágenes" },
+  { value: "otros", label: "Otros" },
+];
+
 export type DocumentAttachment = {
   file: File;
   category: string;
@@ -27,17 +35,9 @@ export default function UploadModal({
   onClose,
   onConfirm,
 }: UploadModalProps) {
-  const fallbackCategories: DocumentCategoryOption[] = [
-    { value: "contrato", label: "Contratos" },
-    { value: "poliza", label: "Pólizas" },
-    { value: "factura", label: "Facturas" },
-    { value: "imagen", label: "Imágenes" },
-    { value: "otros", label: "Otros" },
-  ];
-
   const availableCategories = categories?.length
     ? categories
-    : fallbackCategories;
+    : DEFAULT_DOCUMENT_CATEGORIES;
 
   const defaultCategory = availableCategories[0]?.value ?? "otros";
 

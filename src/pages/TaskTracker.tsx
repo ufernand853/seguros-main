@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
+import type { DocumentAttachment } from "../components/UploadModal";
 
 type Task = {
   id: string;
@@ -73,6 +75,21 @@ const TASKS: Task[] = [
 export default function TaskTracker() {
   const [estado, setEstado] = useState<string>("activos");
   const [search, setSearch] = useState("");
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [attachmentsByTask, setAttachmentsByTask] = useState<
+    Record<string, DocumentAttachment[]>
+  >({});
+
+  const documentCategories = DEFAULT_DOCUMENT_CATEGORIES;
+
+  const categoryLabels = useMemo(
+    () =>
+      documentCategories.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    [documentCategories]
+  );
 
   const agrupadas = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -95,6 +112,18 @@ export default function TaskTracker() {
   }, [estado, search]);
 
   const fechas = useMemo(() => Object.keys(agrupadas).sort((a, b) => b.localeCompare(a)), [agrupadas]);
+
+  const closeModal = () => setActiveTaskId(null);
+
+  const handleConfirmAttachments = (files: DocumentAttachment[]) => {
+    if (!activeTaskId) return;
+    const taskId = activeTaskId;
+    setAttachmentsByTask((prev) => ({
+      ...prev,
+      [taskId]: files,
+    }));
+    setActiveTaskId(null);
+  };
 
   return (
     <div className="flex-1 flex flex-col gap-5">
@@ -166,6 +195,40 @@ export default function TaskTracker() {
                       <span>Responsable: {task.responsable}</span>
                       <span>ID: {task.id}</span>
                     </div>
+                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Documentos
+                      </div>
+                      {attachmentsByTask[task.id]?.length ? (
+                        <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                          {attachmentsByTask[task.id].map((attachment, index) => (
+                            <li
+                              key={`${attachment.file.name}-${index}`}
+                              className="flex flex-wrap items-center gap-2"
+                            >
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                {categoryLabels[attachment.category] ?? attachment.category}
+                              </span>
+                              <span
+                                className="truncate text-slate-500"
+                                title={attachment.file.name}
+                              >
+                                {attachment.file.name}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-400">Sin adjuntos</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTaskId(task.id)}
+                        className="mt-3 inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                      >
+                        Gestionar adjuntos
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -173,6 +236,14 @@ export default function TaskTracker() {
           ))}
         </div>
       </section>
+      <UploadModal
+        open={Boolean(activeTaskId)}
+        title="Adjuntar documentos"
+        categories={documentCategories}
+        initialFiles={activeTaskId ? attachmentsByTask[activeTaskId] ?? [] : []}
+        onClose={closeModal}
+        onConfirm={handleConfirmAttachments}
+      />
     </div>
   );
 }
