@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLayout from "./layout/AppLayout";
 
@@ -7,6 +7,10 @@ import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
 import Clientes from "./pages/Clientes";
 import NuevoCliente from "./pages/NuevoCliente";
+import PolicyPipeline from "./pages/PolicyPipeline";
+import ProductionControl from "./pages/ProductionControl";
+import PolicyRenewals from "./pages/PolicyRenewals";
+import TaskTracker from "./pages/TaskTracker";
 
 
 
@@ -24,13 +28,13 @@ export default function App() {
 
       {/* Páginas con layout */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
+      <Route path="/pipeline" element={withLayout(<PolicyPipeline />)} />
+      <Route path="/produccion" element={withLayout(<ProductionControl />)} />
+      <Route path="/renovaciones" element={withLayout(<PolicyRenewals />)} />
+      <Route path="/gestiones" element={withLayout(<TaskTracker />)} />
       <Route path="/clientes" element={withLayout(<Clientes />)} />
-      <Route path="/agenda" element={withLayout(<Placeholder />)} />
-      <Route path="/notificaciones" element={withLayout(<Placeholder />)} />
+      <Route path="/clientes/nuevo" element={withLayout(<NuevoCliente />)} />
       <Route path="/configuracion" element={withLayout(<Placeholder />)} />
-      <Route path="/otro" element={withLayout(<Placeholder />)} />
-      <Route path="/otro2" element={withLayout(<Placeholder />)} />
-	  <Route path="/clientes/nuevo" element={withLayout(<NuevoCliente />)} />
 
 
       {/* Redirect raíz */}

@@ -4,12 +4,12 @@ import { useNavigate } from "react-router-dom";
 type Tile = { label: string; path: string; bg?: string };
 
 const TILES: Tile[] = [
-  { label: "Clientes",        path: "/clientes",        bg: "bg-blue-600 hover:bg-blue-700" },
-  { label: "Agenda",          path: "/agenda",          bg: "bg-emerald-600 hover:bg-emerald-700" },
-  { label: "Notificaciones",  path: "/notificaciones",  bg: "bg-amber-600 hover:bg-amber-700" },
-  { label: "Otro",            path: "/otro",            bg: "bg-indigo-600 hover:bg-indigo-700" },
-  { label: "Otro2",           path: "/otro2",           bg: "bg-rose-600 hover:bg-rose-700" },
-  { label: "Configuración",   path: "/configuracion",   bg: "bg-slate-700 hover:bg-slate-800" },
+  { label: "Pipeline de pólizas", path: "/pipeline", bg: "bg-indigo-600 hover:bg-indigo-700" },
+  { label: "Producción & comisiones", path: "/produccion", bg: "bg-emerald-600 hover:bg-emerald-700" },
+  { label: "Agenda de renovaciones", path: "/renovaciones", bg: "bg-amber-600 hover:bg-amber-700" },
+  { label: "Seguimiento de gestiones", path: "/gestiones", bg: "bg-rose-600 hover:bg-rose-700" },
+  { label: "Clientes", path: "/clientes", bg: "bg-blue-600 hover:bg-blue-700" },
+  { label: "Configuración", path: "/configuracion", bg: "bg-slate-700 hover:bg-slate-800" },
 ];
 
 export default function Dashboard() {
