@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import UploadModal from "../components/UploadModal";
+import UploadModal, {
+  type DocumentAttachment,
+  type DocumentCategoryOption,
+} from "../components/UploadModal";
 
 type NuevoClientePayload = {
   nombre: string;
@@ -13,9 +16,17 @@ type NuevoClientePayload = {
   pais?: string;
   contacto?: string;
   notas?: string;
-  docFiles: File[];       // fotos del documento
-  otherDocs: File[];      // otros documentos
+  docFiles: DocumentAttachment[]; // fotos del documento
+  otherDocs: DocumentAttachment[]; // otros documentos
 };
+
+const DOCUMENT_TYPE_OPTIONS: DocumentCategoryOption[] = [
+  { value: "contrato", label: "Contratos" },
+  { value: "poliza", label: "Pólizas" },
+  { value: "factura", label: "Facturas" },
+  { value: "imagen", label: "Imágenes" },
+  { value: "otros", label: "Otros" },
+];
 
 export default function NuevoCliente() {
   const navigate = useNavigate();
@@ -41,6 +52,29 @@ export default function NuevoCliente() {
   const onChange = (k: keyof NuevoClientePayload, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
 
+  const getCategoryLabel = (value: string) =>
+    DOCUMENT_TYPE_OPTIONS.find((opt) => opt.value === value)?.label ?? value;
+
+  const renderAttachmentList = (attachments: DocumentAttachment[]) => {
+    if (attachments.length === 0) return null;
+
+    return (
+      <ul className="mt-2 space-y-1 text-sm text-slate-600">
+        {attachments.map((attachment, idx) => (
+          <li
+            key={`${attachment.file.name}-${idx}`}
+            className="flex items-center justify-between gap-3"
+          >
+            <span className="truncate">{attachment.file.name}</span>
+            <span className="text-xs rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+              {getCategoryLabel(attachment.category)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   const onSave = () => {
     // TODO: enviar a API. Por ahora mostramos payload en consola.
     // NOTA: los File[] no se “stringifican”; se envían con FormData si hay backend.
@@ -49,7 +83,21 @@ export default function NuevoCliente() {
     // Object.entries(payloadSinFiles).forEach(([k,v])=> fd.append(k, String(v ?? "")));
     // form.docFiles.forEach(f => fd.append("docFiles", f));
     // form.otherDocs.forEach(f => fd.append("otherDocs", f));
-    console.log("NuevoCliente payload", form);
+    const payloadToLog = {
+      ...form,
+      docFiles: form.docFiles.map((attachment) => ({
+        name: attachment.file.name,
+        category: attachment.category,
+        size: attachment.file.size,
+      })),
+      otherDocs: form.otherDocs.map((attachment) => ({
+        name: attachment.file.name,
+        category: attachment.category,
+        size: attachment.file.size,
+      })),
+    };
+
+    console.log("NuevoCliente payload", payloadToLog);
     navigate("/clientes");
   };
 
@@ -94,11 +142,7 @@ export default function NuevoCliente() {
               >
                 Subir documento
               </button>
-              {form.docFiles.length > 0 && (
-                <span className="ml-3 text-sm text-slate-600">
-                  {form.docFiles.length} archivo(s) adjunto(s)
-                </span>
-              )}
+              {renderAttachmentList(form.docFiles)}
             </div>
           </div>
 
@@ -217,11 +261,7 @@ export default function NuevoCliente() {
           >
             Otros documentos de identificación o de interés
           </button>
-          {form.otherDocs.length > 0 && (
-            <span className="ml-3 text-sm text-slate-600">
-              {form.otherDocs.length} archivo(s) adjunto(s)
-            </span>
-          )}
+          {renderAttachmentList(form.otherDocs)}
         </div>
       </div>
 
@@ -248,6 +288,7 @@ export default function NuevoCliente() {
         open={showDocModal}
         title="Subir documento (RUT / identificación)"
         initialFiles={form.docFiles}
+        categories={DOCUMENT_TYPE_OPTIONS}
         onClose={() => setShowDocModal(false)}
         onConfirm={(files) => {
           setForm((s) => ({ ...s, docFiles: files }));
@@ -259,6 +300,7 @@ export default function NuevoCliente() {
         open={showOtherDocsModal}
         title="Otros documentos"
         initialFiles={form.otherDocs}
+        categories={DOCUMENT_TYPE_OPTIONS}
         onClose={() => setShowOtherDocsModal(false)}
         onConfirm={(files) => {
           setForm((s) => ({ ...s, otherDocs: files }));
