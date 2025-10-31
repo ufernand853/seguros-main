@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
+import type { DocumentAttachment } from "../components/UploadModal";
 
 type CompanyBreakdown = {
   nombre: string;
@@ -75,6 +77,21 @@ const PERIODOS = ["Marzo 2024", "Febrero 2024", "Enero 2024"];
 export default function ProductionControl() {
   const [periodo, setPeriodo] = useState(PERIODOS[0]);
   const [search, setSearch] = useState("");
+  const [activeProducerId, setActiveProducerId] = useState<string | null>(null);
+  const [attachmentsByProducer, setAttachmentsByProducer] = useState<
+    Record<string, DocumentAttachment[]>
+  >({});
+
+  const documentCategories = DEFAULT_DOCUMENT_CATEGORIES;
+
+  const categoryLabels = useMemo(
+    () =>
+      documentCategories.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    [documentCategories]
+  );
 
   const filtrados = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -100,6 +117,18 @@ export default function ProductionControl() {
   }, [filtrados]);
 
   const cumplimiento = totales.objetivo === 0 ? 0 : Math.round((totales.produccionMes / totales.objetivo) * 100);
+
+  const closeModal = () => setActiveProducerId(null);
+
+  const handleConfirmAttachments = (files: DocumentAttachment[]) => {
+    if (!activeProducerId) return;
+    const producerId = activeProducerId;
+    setAttachmentsByProducer((prev) => ({
+      ...prev,
+      [producerId]: files,
+    }));
+    setActiveProducerId(null);
+  };
 
   return (
     <div className="flex-1 flex flex-col gap-5">
@@ -166,6 +195,7 @@ export default function ProductionControl() {
                 <th className="px-4 py-3 font-semibold">Objetivo</th>
                 <th className="px-4 py-3 font-semibold">Bonificaciones / compañías</th>
                 <th className="px-4 py-3 font-semibold">Seguimiento</th>
+                <th className="px-4 py-3 font-semibold">Documentos</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -215,12 +245,45 @@ export default function ProductionControl() {
                       </ul>
                     </td>
                     <td className="px-4 py-3 text-slate-600 text-sm">{prod.seguimiento}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-2">
+                        {attachmentsByProducer[prod.id]?.length ? (
+                          <ul className="space-y-1 text-xs text-slate-600">
+                            {attachmentsByProducer[prod.id].map((attachment, index) => (
+                              <li
+                                key={`${attachment.file.name}-${index}`}
+                                className="flex flex-wrap items-center gap-2"
+                              >
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                  {categoryLabels[attachment.category] ?? attachment.category}
+                                </span>
+                                <span
+                                  className="truncate text-slate-500"
+                                  title={attachment.file.name}
+                                >
+                                  {attachment.file.name}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-xs text-slate-400">Sin adjuntos</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setActiveProducerId(prod.id)}
+                          className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                        >
+                          Gestionar adjuntos
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                     No se encontraron productores para el criterio seleccionado.
                   </td>
                 </tr>
@@ -229,6 +292,16 @@ export default function ProductionControl() {
           </table>
         </div>
       </section>
+      <UploadModal
+        open={Boolean(activeProducerId)}
+        title="Adjuntar documentos"
+        categories={documentCategories}
+        initialFiles={
+          activeProducerId ? attachmentsByProducer[activeProducerId] ?? [] : []
+        }
+        onClose={closeModal}
+        onConfirm={handleConfirmAttachments}
+      />
     </div>
   );
 }

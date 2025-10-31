@@ -1,21 +1,47 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+export type DocumentCategoryOption = {
+  value: string;
+  label: string;
+};
+
+export const DEFAULT_DOCUMENT_CATEGORIES: DocumentCategoryOption[] = [
+  { value: "contrato", label: "Contratos" },
+  { value: "poliza", label: "Pólizas" },
+  { value: "factura", label: "Facturas" },
+  { value: "imagen", label: "Imágenes" },
+  { value: "otros", label: "Otros" },
+];
+
+export type DocumentAttachment = {
+  file: File;
+  category: string;
+};
+
 type UploadModalProps = {
   open: boolean;
   title?: string;
-  initialFiles?: File[];
+  initialFiles?: DocumentAttachment[];
+  categories?: DocumentCategoryOption[];
   onClose: () => void;
-  onConfirm: (files: File[]) => void;
+  onConfirm: (files: DocumentAttachment[]) => void;
 };
 
 export default function UploadModal({
   open,
   title = "Subir archivos",
   initialFiles = [],
+  categories,
   onClose,
   onConfirm,
 }: UploadModalProps) {
-  const [files, setFiles] = useState<File[]>(initialFiles);
+  const availableCategories = categories?.length
+    ? categories
+    : DEFAULT_DOCUMENT_CATEGORIES;
+
+  const defaultCategory = availableCategories[0]?.value ?? "otros";
+
+  const [files, setFiles] = useState<DocumentAttachment[]>(initialFiles);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -24,15 +50,13 @@ export default function UploadModal({
     setFiles(initialFiles);
   }, [initialFiles, open]);
 
-  // Limpia object URLs al desmontar
-  useEffect(() => {
-    return () => previews.forEach((p) => URL.revokeObjectURL(p.url));
-  });
-
   const onPick = () => inputRef.current?.click();
 
   const addFiles = (fl: FileList | File[]) => {
-    const incoming = Array.from(fl);
+    const incoming = Array.from(fl).map<DocumentAttachment>((file) => ({
+      file,
+      category: defaultCategory,
+    }));
     setFiles((prev) => [...prev, ...incoming]);
   };
 
@@ -52,23 +76,34 @@ export default function UploadModal({
   const removeAt = (idx: number) =>
     setFiles((prev) => prev.filter((_, i) => i !== idx));
 
+  const updateCategory = (idx: number, category: string) => {
+    setFiles((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, category } : item))
+    );
+  };
+
   const totalSize = useMemo(
-    () => files.reduce((acc, f) => acc + (f?.size || 0), 0),
+    () => files.reduce((acc, f) => acc + (f?.file.size || 0), 0),
     [files]
   );
 
   const previews = useMemo(() => {
     return files.map((f) => {
-      const isImg = f.type.startsWith("image/");
+      const isImg = f.file.type.startsWith("image/");
       return {
-        name: f.name,
-        size: f.size,
-        type: f.type || "application/octet-stream",
+        name: f.file.name,
+        size: f.file.size,
+        type: f.file.type || "application/octet-stream",
         isImg,
-        url: isImg ? URL.createObjectURL(f) : "",
+        category: f.category,
+        url: isImg ? URL.createObjectURL(f.file) : "",
       };
     });
   }, [files]);
+
+  useEffect(() => {
+    return () => previews.forEach((p) => p.url && URL.revokeObjectURL(p.url));
+  }, [previews]);
 
   if (!open) return null;
 
@@ -135,7 +170,7 @@ export default function UploadModal({
             <div className="max-h-64 overflow-auto border border-slate-200 rounded-xl">
               <ul className="divide-y divide-slate-200">
                 {previews.map((p, idx) => (
-                  <li key={idx} className="flex items-center gap-3 p-3">
+                  <li key={idx} className="flex flex-wrap items-center gap-3 p-3">
                     <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center overflow-hidden">
                       {p.isImg ? (
                         <img
@@ -154,6 +189,22 @@ export default function UploadModal({
                       <div className="text-xs text-slate-500 truncate">
                         {p.type || "archivo"} · {(p.size / 1024).toFixed(1)} KB
                       </div>
+                    </div>
+                    <div className="min-w-[160px]">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Tipo de documento
+                      </label>
+                      <select
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={p.category}
+                        onChange={(e) => updateCategory(idx, e.target.value)}
+                      >
+                        {availableCategories.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <button
                       type="button"
