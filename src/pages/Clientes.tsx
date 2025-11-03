@@ -31,8 +31,9 @@ export default function Clientes() {
   }, [debounced]);
 
   const open = (c: Cliente) => navigate(`/clientes?sel=${encodeURIComponent(c.id)}`);
-  
+
   const nuevo = () => navigate("/clientes/nuevo");
+  const verFicha = () => navigate("/clientes/ficha");
 
   return (
     <div className="flex-1 flex flex-col gap-4">
@@ -56,13 +57,20 @@ export default function Clientes() {
             </div>
           </div>
 
-          <div className="md:self-end">
+          <div className="md:self-end flex flex-col sm:flex-row gap-2">
             <button
               type="button"
               onClick={nuevo}
               className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
             >
               + Nuevo cliente
+            </button>
+            <button
+              type="button"
+              onClick={verFicha}
+              className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+            >
+              Ver ficha integral demo
             </button>
           </div>
         </div>
