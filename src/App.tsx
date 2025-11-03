@@ -12,6 +12,7 @@ import ProductionControl from "./pages/ProductionControl";
 import PolicyRenewals from "./pages/PolicyRenewals";
 import TaskTracker from "./pages/TaskTracker";
 import Client360View from "./pages/Client360View";
+import InsuranceCarriersMaintenance from "./pages/InsuranceCarriersMaintenance";
 
 
 
@@ -33,6 +34,7 @@ export default function App() {
       <Route path="/produccion" element={withLayout(<ProductionControl />)} />
       <Route path="/renovaciones" element={withLayout(<PolicyRenewals />)} />
       <Route path="/gestiones" element={withLayout(<TaskTracker />)} />
+      <Route path="/aseguradoras" element={withLayout(<InsuranceCarriersMaintenance />)} />
       <Route path="/clientes" element={withLayout(<Clientes />)} />
       <Route path="/clientes/nuevo" element={withLayout(<NuevoCliente />)} />
       <Route path="/clientes/ficha" element={withLayout(<Client360View />)} />
