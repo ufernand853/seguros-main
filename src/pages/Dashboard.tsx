@@ -9,6 +9,7 @@ const TILES: Tile[] = [
   { label: "Agenda de renovaciones", path: "/renovaciones", bg: "bg-amber-600 hover:bg-amber-700" },
   { label: "Seguimiento de gestiones", path: "/gestiones", bg: "bg-rose-600 hover:bg-rose-700" },
   { label: "Clientes", path: "/clientes", bg: "bg-blue-600 hover:bg-blue-700" },
+  { label: "Ficha integral cliente", path: "/clientes/ficha", bg: "bg-teal-600 hover:bg-teal-700" },
   { label: "Configuración", path: "/configuracion", bg: "bg-slate-700 hover:bg-slate-800" },
 ];
 
