@@ -10,13 +10,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Barra superior */}
       <div className="flex items-center justify-between px-4 py-3 bg-white shadow-md">
-        <button
-          type="button"
-          onClick={() => navigate("/dashboard")}
-          className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
-        >
-          Dashboard
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+          >
+            Dashboard
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => { logout(); navigate("/login", { replace: true }); }}
