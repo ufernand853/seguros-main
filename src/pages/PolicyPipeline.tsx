@@ -19,8 +19,8 @@ type PipelineCase = {
 const CASES: PipelineCase[] = [
   {
     id: "UTC44079",
-    cliente: "Logística Río Negro",
-    documento: "RUT 21.123.456-001",
+    cliente: "Cliente Demo Uno S.A.",
+    documento: "RUT 99.000.001-001",
     compania: "Porto",
     ramo: "Integral PyME",
     etapa: "Análisis",
@@ -30,8 +30,8 @@ const CASES: PipelineCase[] = [
   },
   {
     id: "UTC44110",
-    cliente: "Agrovisión S.A.",
-    documento: "RUT 21.789.654-001",
+    cliente: "Cliente Demo Dos SRL",
+    documento: "RUT 99.000.002-001",
     compania: "Sura",
     ramo: "Todo Riesgo Operativo",
     etapa: "Documentación",
@@ -41,8 +41,8 @@ const CASES: PipelineCase[] = [
   },
   {
     id: "UTC44145",
-    cliente: "Estudio Contable Norte",
-    documento: "RUT 21.555.222-001",
+    cliente: "Cliente Demo Tres Coop.",
+    documento: "RUT 99.000.003-001",
     compania: "Mapfre",
     ramo: "Responsabilidad Profesional",
     etapa: "Cotización",
@@ -53,8 +53,8 @@ const CASES: PipelineCase[] = [
   },
   {
     id: "UTC44201",
-    cliente: "Constructora Horizonte",
-    documento: "RUT 21.654.321-001",
+    cliente: "Cliente Demo Cuatro Ltda.",
+    documento: "RUT 99.000.004-001",
     compania: "Sancor",
     ramo: "Caución Obra Pública",
     etapa: "Presentación",
@@ -65,8 +65,8 @@ const CASES: PipelineCase[] = [
   },
   {
     id: "UTC44233",
-    cliente: "Servicios Integrales",
-    documento: "RUT 21.901.222-001",
+    cliente: "Cliente Demo Cinco",
+    documento: "RUT 99.000.005-001",
     compania: "Porto",
     ramo: "Accidentes Personales",
     etapa: "Seguimiento",

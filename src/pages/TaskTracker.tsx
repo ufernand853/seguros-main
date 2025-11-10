@@ -18,7 +18,7 @@ const TASKS: Task[] = [
   {
     id: "T-101",
     fecha: "2024-03-12",
-    cliente: "Alquileres del Prado",
+    cliente: "Cliente Demo Uno S.A.",
     movimiento: "MV-4401",
     item: "Alquiler",
     compania: "Porto",
@@ -29,7 +29,7 @@ const TASKS: Task[] = [
   {
     id: "T-102",
     fecha: "2024-03-12",
-    cliente: "Transportes Atlántico",
+    cliente: "Cliente Demo Dos SRL",
     movimiento: "SIN-8821",
     item: "Siniestro",
     compania: "Sura",
@@ -40,7 +40,7 @@ const TASKS: Task[] = [
   {
     id: "T-103",
     fecha: "2024-03-11",
-    cliente: "Constructora Horizonte",
+    cliente: "Cliente Demo Tres Coop.",
     movimiento: "MV-4393",
     item: "Caución",
     compania: "Sancor",
@@ -51,7 +51,7 @@ const TASKS: Task[] = [
   {
     id: "T-104",
     fecha: "2024-03-10",
-    cliente: "Club Náutico",
+    cliente: "Cliente Demo Cuatro Ltda.",
     movimiento: "REN-3302",
     item: "Salud",
     compania: "BSE",
@@ -62,7 +62,7 @@ const TASKS: Task[] = [
   {
     id: "T-105",
     fecha: "2024-03-09",
-    cliente: "Servicios Industriales",
+    cliente: "Cliente Demo Cinco",
     movimiento: "SIN-8712",
     item: "Siniestro",
     compania: "Mapfre",
