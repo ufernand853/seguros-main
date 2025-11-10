@@ -117,7 +117,7 @@ export default function NuevoCliente() {
               value={form.nombre}
               onChange={(e) => onChange("nombre", e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="Ej: Casarone Agroindustrial S.A."
+                placeholder="Ej: Cliente Demo Uno S.A."
             />
           </div>
 

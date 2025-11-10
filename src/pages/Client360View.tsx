@@ -1,13 +1,13 @@
 import { FormEvent, useMemo, useState } from "react";
 
 const CLIENT_DATA = {
-  nombre: "Lucía Fernández",
-  documento: "CI 4.567.890-1",
-  telefono: "+598 94 456 789",
-  email: "lucia.fernandez@email.com",
-  direccion: "Misiones 1234, Apto 301",
+  nombre: "Alicia Demo",
+  documento: "CI 4.999.999-9",
+  telefono: "+598 94 000 000",
+  email: "alicia.demo@example.com",
+  direccion: "Calle Imaginaria 1234, Apto 301",
   ciudad: "Montevideo",
-  titular: "Lucía Fernández",
+  titular: "Alicia Demo",
   vigencia: "Desde 15/01/2021",
 };
 
@@ -18,13 +18,13 @@ const INITIAL_INSURANCE_SUMMARY = [
 ];
 
 const ASSOCIATED_CLIENTS = [
-  { relacion: "Titular", nombre: "Lucía Fernández", producto: "Garantía Alquiler" },
-  { relacion: "Copropietario", nombre: "Andrés García", producto: "Seguro Auto" },
-  { relacion: "Inquilino", nombre: "María Torres", producto: "Garantía Alquiler" },
+  { relacion: "Titular", nombre: "Alicia Demo", producto: "Garantía Alquiler" },
+  { relacion: "Copropietario", nombre: "Bruno Demo", producto: "Seguro Auto" },
+  { relacion: "Inquilino", nombre: "Carla Demo", producto: "Garantía Alquiler" },
 ];
 
 const CLAIM_STAGES = [
-  { etapa: "Ingreso", fecha: "2024-03-01", detalle: "Denuncia por choque leve en Bulevar Artigas" },
+  { etapa: "Ingreso", fecha: "2024-03-01", detalle: "Denuncia por choque leve en Av. Demo" },
   { etapa: "Inspección", fecha: "2024-03-03", detalle: "Inspección fotográfica enviada a la aseguradora" },
   { etapa: "Carta de cobertura", fecha: "2024-03-05", detalle: "Carta emitida y enviada al cliente" },
   { etapa: "Pago", fecha: "2024-03-12", detalle: "Pago de reparación autorizado" },
@@ -70,9 +70,9 @@ const DOUBLE_COVERAGE = [
 ];
 
 const TENANT_HISTORY = [
-  { periodo: "2021-2022", inquilino: "Pablo Méndez", estado: "Finalizado sin reclamos" },
-  { periodo: "2022-2023", inquilino: "Laura Cabrera", estado: "Finalizado con reintegro parcial" },
-  { periodo: "2023-Actual", inquilino: "María Torres", estado: "En curso" },
+  { periodo: "2021-2022", inquilino: "Diego Demo", estado: "Finalizado sin reclamos" },
+  { periodo: "2022-2023", inquilino: "Elena Demo", estado: "Finalizado con reintegro parcial" },
+  { periodo: "2023-Actual", inquilino: "Carla Demo", estado: "En curso" },
 ];
 
 const INSURANCE_TYPES = [

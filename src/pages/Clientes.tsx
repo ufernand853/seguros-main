@@ -4,11 +4,11 @@ import { useNavigate } from "react-router-dom";
 
 type Cliente = { id: string; nombre: string; doc?: string; ciudad?: string };
 const MOCK: Cliente[] = [
-  { id: "1", nombre: "Acme S.A.", doc: "RUT 21.111.111-001", ciudad: "Montevideo" },
-  { id: "2", nombre: "Casarone Agroindustrial S.A.", doc: "RUT 21.222.222-001", ciudad: "Rio Branco" },
-  { id: "3", nombre: "Frigorífico Atlántico", doc: "RUT 21.333.333-001", ciudad: "Canelones" },
-  { id: "4", nombre: "Transportes del Sur", doc: "RUT 21.444.444-001", ciudad: "Las Piedras" },
-  { id: "5", nombre: "Servicios Industriales", doc: "RUT 21.555.555-001", ciudad: "Durazno" },
+  { id: "1", nombre: "Cliente Demo Uno S.A.", doc: "RUT 99.000.001-001", ciudad: "Ciudad Norte" },
+  { id: "2", nombre: "Cliente Demo Dos SRL", doc: "RUT 99.000.002-001", ciudad: "Ciudad Sur" },
+  { id: "3", nombre: "Cliente Demo Tres Coop.", doc: "RUT 99.000.003-001", ciudad: "Ciudad Este" },
+  { id: "4", nombre: "Cliente Demo Cuatro Ltda.", doc: "RUT 99.000.004-001", ciudad: "Ciudad Oeste" },
+  { id: "5", nombre: "Cliente Demo Cinco", doc: "RUT 99.000.005-001", ciudad: "Ciudad Central" },
 ];
 
 export default function Clientes() {
