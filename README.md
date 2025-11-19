@@ -16,9 +16,12 @@ Proyecto prototipo visual “Gestión de seguros”
   - src/App.tsx → rutas /login, /dashboard, secciones (clientes, agenda, notificaciones, otro, otro2, configuración), fallback a Placeholder
   - src/auth/AuthProvider.tsx → sesión mock con TTL
   - src/routes/ProtectedRoute.tsx → protege rutas
-  - src/pages/Login.tsx → login con botón Google (mock)
+- src/pages/Login.tsx → login con formulario propio (mock de credenciales internas)
   - src/pages/Dashboard.tsx → grid 6 tiles, logout, muestra usuario
   - src/pages/Placeholder.tsx → mensaje “Disponible en futuras implementaciones” + botón Login (siempre) y Dashboard (solo si hay sesión).
+
+- Plan de evolución por etapas en `PLAN.md`.
+- Blueprint de implementación completo en `IMPLEMENTATION.md`.
 
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder
