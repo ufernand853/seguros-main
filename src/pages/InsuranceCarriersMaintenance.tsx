@@ -163,20 +163,37 @@ const formatDate = (isoDate: string) =>
   new Intl.DateTimeFormat("es-UY", { dateStyle: "medium" }).format(new Date(isoDate));
 
 export default function InsuranceCarriersMaintenance() {
+  const [carriers, setCarriers] = useState<Carrier[]>(CARRIERS);
   const [search, setSearch] = useState("");
   const [estado, setEstado] = useState<string>("todos");
   const [ramo, setRamo] = useState<string>("todos");
   const [selectedId, setSelectedId] = useState<string>(CARRIERS[0]?.id ?? "");
+  const [showForm, setShowForm] = useState(false);
+  const [newCarrier, setNewCarrier] = useState<Carrier>({
+    id: "",
+    nombre: "",
+    pais: "",
+    ramos: [],
+    estado: "Activa",
+    calificacion: 4,
+    primasAnuales: 0,
+    polizasVigentes: 0,
+    siniestralidad: 0,
+    contacto: { nombre: "", email: "", telefono: "" },
+    acuerdosClaves: [],
+    ultimaActualizacion: new Date().toISOString().slice(0, 10),
+    notas: "",
+  });
 
   const allRamos = useMemo(() => {
     const values = new Set<string>();
-    CARRIERS.forEach((carrier) => carrier.ramos.forEach((item) => values.add(item)));
+    carriers.forEach((carrier) => carrier.ramos.forEach((item) => values.add(item)));
     return Array.from(values).sort((a, b) => a.localeCompare(b, "es"));
-  }, []);
+  }, [carriers]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return CARRIERS.filter((carrier) => {
+    return carriers.filter((carrier) => {
       if (estado !== "todos" && carrier.estado !== estado) return false;
       if (ramo !== "todos" && !carrier.ramos.includes(ramo)) return false;
       if (!q) return true;
@@ -186,7 +203,7 @@ export default function InsuranceCarriersMaintenance() {
         carrier.contacto.nombre.toLowerCase().includes(q)
       );
     }).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  }, [estado, ramo, search]);
+  }, [carriers, estado, ramo, search]);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -223,6 +240,41 @@ export default function InsuranceCarriersMaintenance() {
     };
   }, [filtered]);
 
+  const handleSubmit = () => {
+    const ramosLimpios = newCarrier.ramos.map((value) => value.trim()).filter(Boolean);
+    const acuerdosLimpios = newCarrier.acuerdosClaves.map((value) => value.trim()).filter(Boolean);
+
+    if (!newCarrier.nombre.trim() || !newCarrier.pais.trim() || ramosLimpios.length === 0) {
+      return;
+    }
+
+    const nextId = `CAR-${(carriers.length + 1).toString().padStart(3, "0")}`;
+    const payload: Carrier = {
+      ...newCarrier,
+      id: nextId,
+      calificacion: Number(newCarrier.calificacion) || 0,
+      primasAnuales: Number(newCarrier.primasAnuales) || 0,
+      polizasVigentes: Number(newCarrier.polizasVigentes) || 0,
+      siniestralidad: Number(newCarrier.siniestralidad) || 0,
+      ramos: ramosLimpios,
+      acuerdosClaves: acuerdosLimpios,
+    };
+
+    setCarriers((prev) => [...prev, payload]);
+    setSelectedId(nextId);
+    setShowForm(false);
+    setNewCarrier({
+      ...newCarrier,
+      id: "",
+      nombre: "",
+      pais: "",
+      ramos: [],
+      acuerdosClaves: [],
+      notas: "",
+      ultimaActualizacion: new Date().toISOString().slice(0, 10),
+    });
+  };
+
   return (
     <div className="flex-1 flex flex-col gap-6">
       <header className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -237,10 +289,11 @@ export default function InsuranceCarriersMaintenance() {
           </div>
           <button
             type="button"
+            onClick={() => setShowForm((prev) => !prev)}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-100"
           >
             <span className="text-lg">＋</span>
-            Nueva aseguradora
+            {showForm ? "Ocultar formulario" : "Nueva aseguradora"}
           </button>
         </div>
 
@@ -251,6 +304,196 @@ export default function InsuranceCarriersMaintenance() {
           <ResumenCard title="Siniestralidad promedio" value={`${resumen.siniestralidadPromedio}%`} subtitle="Sobre las filtradas" />
         </dl>
       </header>
+
+      {showForm && (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Alta rápida</p>
+              <h2 className="text-lg font-bold text-slate-900">Agregar nueva aseguradora</h2>
+              <p className="text-sm text-slate-600 mt-1">Completa los datos mínimos para sumarla al catálogo.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Nombre comercial
+              <input
+                value={newCarrier.nombre}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, nombre: event.target.value }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="Ej. Seguros Atlántico"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              País
+              <input
+                value={newCarrier.pais}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, pais: event.target.value }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="Ej. Uruguay"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Estado
+              <select
+                value={newCarrier.estado}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, estado: event.target.value as Carrier["estado"] }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              >
+                {ESTADOS.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Ramos (separados por coma)
+              <input
+                value={newCarrier.ramos.join(", ")}
+                onChange={(event) =>
+                  setNewCarrier((prev) => ({ ...prev, ramos: event.target.value.split(",").map((item) => item.trim()) }))
+                }
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="Automotor, Vida"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Calificación (0 a 5)
+              <input
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={newCarrier.calificacion}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, calificacion: Number(event.target.value) }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Primas anuales (USD)
+              <input
+                type="number"
+                min="0"
+                value={newCarrier.primasAnuales}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, primasAnuales: Number(event.target.value) }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="1200000"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Pólizas vigentes
+              <input
+                type="number"
+                min="0"
+                value={newCarrier.polizasVigentes}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, polizasVigentes: Number(event.target.value) }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="300"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Siniestralidad (%)
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={newCarrier.siniestralidad}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, siniestralidad: Number(event.target.value) }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="35"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Responsable comercial
+              <input
+                value={newCarrier.contacto.nombre}
+                onChange={(event) =>
+                  setNewCarrier((prev) => ({ ...prev, contacto: { ...prev.contacto, nombre: event.target.value } }))
+                }
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="Nombre y apellido"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Email
+              <input
+                type="email"
+                value={newCarrier.contacto.email}
+                onChange={(event) =>
+                  setNewCarrier((prev) => ({ ...prev, contacto: { ...prev.contacto, email: event.target.value } }))
+                }
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="correo@aseguradora.com"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Teléfono
+              <input
+                value={newCarrier.contacto.telefono}
+                onChange={(event) =>
+                  setNewCarrier((prev) => ({ ...prev, contacto: { ...prev.contacto, telefono: event.target.value } }))
+                }
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="+598 99 000 000"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1 md:col-span-2">
+              Acuerdos clave (separados por coma)
+              <input
+                value={newCarrier.acuerdosClaves.join(", ")}
+                onChange={(event) =>
+                  setNewCarrier((prev) => ({ ...prev, acuerdosClaves: event.target.value.split(",").map((item) => item.trim()) }))
+                }
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="Bonificación, Coberturas especiales"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1 md:col-span-2">
+              Notas internas
+              <textarea
+                value={newCarrier.notas}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, notas: event.target.value }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="Información adicional para el equipo comercial"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3 items-center">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+            >
+              Guardar aseguradora
+            </button>
+            <p className="text-xs text-slate-500">
+              Se asignará un ID automático y quedará disponible en la tabla y el panel lateral.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="flex-1 grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_1fr]">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 flex flex-col min-h-0">
