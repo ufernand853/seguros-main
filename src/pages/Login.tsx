@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { authenticateWithDemoUser } from "../auth/credentials";
+import { apiLogin } from "../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -11,20 +12,30 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
 
-  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
 
-    const user = authenticateWithDemoUser(email, password);
-    if (!user) {
-      setError("Credenciales inválidas. Revisa tu email y contraseña.");
+    try {
+      const response = await apiLogin(email, password);
+      login(
+        { name: response.user.name, email: response.user.email },
+        response.accessToken,
+        Math.floor(response.expiresInSeconds / 60),
+      );
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      const fallbackUser = authenticateWithDemoUser(email, password);
+      if (fallbackUser) {
+        login({ name: fallbackUser.name, email: fallbackUser.email }, "demo-local-token", 120);
+        navigate("/dashboard", { replace: true });
+      } else {
+        setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
+      }
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    login({ name: user.name, email: user.email }, "demo-local-token", 120);
-    navigate("/dashboard", { replace: true });
   };
 
   return (
