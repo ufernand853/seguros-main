@@ -23,6 +23,37 @@ Proyecto prototipo visual “Gestión de seguros”
 - Plan de evolución por etapas en `PLAN.md`.
 - Blueprint de implementación completo en `IMPLEMENTATION.md`.
 
+## Servidor API (MongoDB)
+
+- Variables de entorno principales (crear un `.env`):
+  - `MONGODB_URI` → cadena de conexión a MongoDB (por defecto `mongodb://localhost:27017/seguros`).
+  - `MONGODB_DB` → nombre de la base de datos (por defecto `seguros`).
+  - `JWT_SECRET` → secreto para firmar los tokens.
+  - `PORT` → puerto del API (por defecto 4000).
+  - `ACCESS_TTL_SECONDS` → segundos de vigencia del access token (por defecto 7200 = 2h).
+  - `REFRESH_TTL_SECONDS` → segundos de vigencia del refresh token (por defecto 86400 = 24h).
+  - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `http://localhost:4000`).
+
+- Puedes usar el archivo `.env.example` incluido en el repo y copiarlo como `.env` para comenzar rápido:
+
+```env
+# Backend API
+MONGODB_URI=mongodb://localhost:27017/seguros
+MONGODB_DB=seguros
+JWT_SECRET=dev-secret-change-me
+PORT=4000
+ACCESS_TTL_SECONDS=7200
+REFRESH_TTL_SECONDS=86400
+
+# Frontend
+VITE_API_URL=http://localhost:4000
+```
+- Provisionar la base de datos con datos de demo:
+  - `npm run seed:mongo`
+- Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
+- El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
+- Configurar `VITE_API_URL` si se usa un host diferente.
+
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder
   - Logout funciona
