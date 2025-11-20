@@ -23,6 +23,19 @@ Proyecto prototipo visual “Gestión de seguros”
 - Plan de evolución por etapas en `PLAN.md`.
 - Blueprint de implementación completo en `IMPLEMENTATION.md`.
 
+## Servidor API (MongoDB)
+
+- Variables de entorno principales (crear un `.env`):
+  - `MONGODB_URI` → cadena de conexión a MongoDB (por defecto `mongodb://localhost:27017/seguros`).
+  - `MONGODB_DB` → nombre de la base de datos (por defecto `seguros`).
+  - `JWT_SECRET` → secreto para firmar los tokens.
+  - `PORT` → puerto del API (por defecto 4000).
+- Provisionar la base de datos con datos de demo:
+  - `npm run seed:mongo`
+- Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
+- El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
+- Configurar `VITE_API_URL` si se usa un host diferente.
+
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder
   - Logout funciona
