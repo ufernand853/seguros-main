@@ -26,6 +26,13 @@ const POLICY_RAMO = [
   "Garantía de alquiler",
 ];
 
+const CLAIM_STATES: Claim["estado"][] = [
+  "En análisis",
+  "Documentación",
+  "Liquidadas",
+  "Finalizado",
+];
+
 const INSURERS = [
   "Porto",
   "Mapfre",
@@ -87,10 +94,18 @@ export default function ClientesPolizasDemo() {
     vigenciaHasta: "",
   });
 
+  const [claimForm, setClaimForm] = useState({
+    descripcion: "",
+    fecha: "",
+    estado: CLAIM_STATES[0],
+    policyId: "",
+  });
+
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("");
 
   const nextPolicyId = useMemo(() => `pol-${100 + policies.length}`, [policies.length]);
+  const nextClaimId = useMemo(() => `sin-${50 + claims.length + 1}`, [claims.length]);
 
   const addPolicy = () => {
     if (!form.numero || !form.vigenciaDesde || !form.vigenciaHasta) {
@@ -109,6 +124,23 @@ export default function ClientesPolizasDemo() {
     setPolicies((prev) => [...prev, newPolicy]);
     setForm({ ramo: POLICY_RAMO[0], aseguradora: INSURERS[0], numero: "", vigenciaDesde: "", vigenciaHasta: "" });
     setSelectedPolicyId(newPolicy.id);
+  };
+
+  const addClaim = () => {
+    if (!claimForm.descripcion || !claimForm.fecha) return;
+
+    const newClaim: Claim = {
+      id: nextClaimId,
+      descripcion: claimForm.descripcion,
+      estado: claimForm.estado,
+      fecha: claimForm.fecha,
+      policyId: claimForm.policyId || undefined,
+    };
+
+    setClaims((prev) => [...prev, newClaim]);
+    setSelectedClaim(newClaim);
+    setSelectedPolicyId(claimForm.policyId);
+    setClaimForm({ descripcion: "", fecha: "", estado: CLAIM_STATES[0], policyId: "" });
   };
 
   const associateClaim = () => {
@@ -250,10 +282,84 @@ export default function ClientesPolizasDemo() {
 
       <section className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-2 bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-slate-800">Seleccionar siniestro</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Elige uno para asignarle la póliza recién creada o alguna existente.
-          </p>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-slate-800">Seleccionar siniestro</h2>
+            <p className="text-sm text-slate-600">Elige uno para asignarle la póliza recién creada o alguna existente.</p>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-800">Alta express de siniestro</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Carga los datos mínimos para registrar el reclamo del cliente y habilitar la asociación inmediata con una póliza.
+            </p>
+
+            <div className="mt-3 grid grid-cols-1 gap-3">
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Descripción
+                <input
+                  value={claimForm.descripcion}
+                  onChange={(event) => setClaimForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                  placeholder="Ej. Impacto leve en paragolpes"
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex flex-col text-sm text-slate-700 gap-1">
+                  Fecha del siniestro
+                  <input
+                    type="date"
+                    value={claimForm.fecha}
+                    onChange={(event) => setClaimForm((prev) => ({ ...prev, fecha: event.target.value }))}
+                    className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </label>
+
+                <label className="flex flex-col text-sm text-slate-700 gap-1">
+                  Estado inicial
+                  <select
+                    value={claimForm.estado}
+                    onChange={(event) => setClaimForm((prev) => ({ ...prev, estado: event.target.value as Claim["estado"] }))}
+                    className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {CLAIM_STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Vincular póliza (opcional)
+                <select
+                  value={claimForm.policyId}
+                  onChange={(event) => setClaimForm((prev) => ({ ...prev, policyId: event.target.value }))}
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Seleccionar</option>
+                  {policies.map((policy) => (
+                    <option key={policy.id} value={policy.id}>
+                      {policy.numero} · {policy.ramo}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-500">ID sugerido: {nextClaimId}</span>
+              </label>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={addClaim}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Registrar siniestro demo
+                </button>
+              </div>
+            </div>
+          </div>
+
           <ul className="mt-4 space-y-3">
             {claims.map((claim) => {
               const isSelected = selectedClaim?.id === claim.id;
