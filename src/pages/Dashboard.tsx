@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 type Tile = { label: string; path: string; bg?: string };
 
 const TILES: Tile[] = [
-  { label: "Pipeline de pólizas", path: "/pipeline", bg: "bg-indigo-600 hover:bg-indigo-700" },
   { label: "Producción & comisiones", path: "/produccion", bg: "bg-emerald-600 hover:bg-emerald-700" },
   { label: "Agenda de renovaciones", path: "/renovaciones", bg: "bg-amber-600 hover:bg-amber-700" },
   { label: "Seguimiento de gestiones", path: "/gestiones", bg: "bg-rose-600 hover:bg-rose-700" },
