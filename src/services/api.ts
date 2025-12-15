@@ -35,4 +35,23 @@ export async function apiRefresh(refreshToken: string): Promise<{ accessToken: s
   return handleResponse(res);
 }
 
+export type CreateClientPayload = {
+  name: string;
+  document: string;
+  city?: string | null;
+  contacts?: { name: string; email?: string | null; phone?: string | null }[];
+};
+
+export async function apiCreateClient(payload: CreateClientPayload, accessToken: string) {
+  const res = await fetch(`${API_BASE}/clients`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(res);
+}
+
 export const apiConfig = { API_BASE };

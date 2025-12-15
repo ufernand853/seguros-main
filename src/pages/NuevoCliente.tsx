@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 import UploadModal, {
   type DocumentAttachment,
   type DocumentCategoryOption,
 } from "../components/UploadModal";
+import { apiCreateClient } from "../services/api";
 
 type NuevoClientePayload = {
   nombre: string;
@@ -30,6 +32,7 @@ const DOCUMENT_TYPE_OPTIONS: DocumentCategoryOption[] = [
 
 export default function NuevoCliente() {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [form, setForm] = useState<NuevoClientePayload>({
     nombre: "",
     rut: "",
@@ -48,6 +51,8 @@ export default function NuevoCliente() {
   // modales
   const [showDocModal, setShowDocModal] = useState(false);
   const [showOtherDocsModal, setShowOtherDocsModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setSaving] = useState(false);
 
   const onChange = (k: keyof NuevoClientePayload, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
@@ -75,30 +80,43 @@ export default function NuevoCliente() {
     );
   };
 
-  const onSave = () => {
-    // TODO: enviar a API. Por ahora mostramos payload en consola.
-    // NOTA: los File[] no se “stringifican”; se envían con FormData si hay backend.
-    // Ejemplo:
-    // const fd = new FormData();
-    // Object.entries(payloadSinFiles).forEach(([k,v])=> fd.append(k, String(v ?? "")));
-    // form.docFiles.forEach(f => fd.append("docFiles", f));
-    // form.otherDocs.forEach(f => fd.append("otherDocs", f));
-    const payloadToLog = {
-      ...form,
-      docFiles: form.docFiles.map((attachment) => ({
-        name: attachment.file.name,
-        category: attachment.category,
-        size: attachment.file.size,
-      })),
-      otherDocs: form.otherDocs.map((attachment) => ({
-        name: attachment.file.name,
-        category: attachment.category,
-        size: attachment.file.size,
-      })),
-    };
+  const onSave = async () => {
+    if (!token) {
+      setError("Sesión no válida. Iniciá sesión nuevamente para crear clientes.");
+      return;
+    }
 
-    console.log("NuevoCliente payload", payloadToLog);
-    navigate("/clientes");
+    setError(null);
+    setSaving(true);
+
+    try {
+      const contacts =
+        form.contacto?.trim() || form.email?.trim() || form.telefono?.trim()
+          ? [
+              {
+                name: form.contacto?.trim() || "Contacto principal",
+                email: form.email?.trim() || null,
+                phone: form.telefono?.trim() || null,
+              },
+            ]
+          : [];
+
+      await apiCreateClient(
+        {
+          name: form.nombre.trim(),
+          document: form.rut.trim(),
+          city: form.ciudad?.trim() || null,
+          contacts,
+        },
+        token,
+      );
+
+      navigate("/clientes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear el cliente");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -106,6 +124,8 @@ export default function NuevoCliente() {
       {/* Sección: Datos generales */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
         <h1 className="text-xl font-bold text-slate-800 mb-4">Nuevo Cliente</h1>
+
+        {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Nombre */}
@@ -277,9 +297,10 @@ export default function NuevoCliente() {
         <button
           type="button"
           onClick={onSave}
-          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+          disabled={isSaving}
+          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold"
         >
-          Guardar cliente
+          {isSaving ? "Guardando..." : "Guardar cliente"}
         </button>
       </div>
 
