@@ -1,7 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { authenticateWithDemoUser } from "../auth/credentials";
 import { apiLogin } from "../services/api";
 
 export default function Login() {
@@ -26,13 +25,7 @@ export default function Login() {
       );
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      const fallbackUser = authenticateWithDemoUser(email, password);
-      if (fallbackUser) {
-        login({ name: fallbackUser.name, email: fallbackUser.email }, "demo-local-token", 120);
-        navigate("/dashboard", { replace: true });
-      } else {
-        setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
-      }
+      setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
       setSubmitting(false);
     }

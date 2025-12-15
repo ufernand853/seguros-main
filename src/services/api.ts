@@ -54,4 +54,78 @@ export async function apiCreateClient(payload: CreateClientPayload, accessToken:
   return handleResponse(res);
 }
 
+export type ClientListItem = {
+  id: string;
+  name: string;
+  document?: string;
+  city?: string | null;
+};
+
+export async function apiListClients(accessToken: string): Promise<{ items: ClientListItem[] }> {
+  const res = await fetch(`${API_BASE}/clients`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  return handleResponse(res);
+}
+
+export type PipelineItem = {
+  id: string;
+  client_id?: string;
+  client_name?: string | null;
+  stage?: string;
+  probability?: number | null;
+  amount?: number | null;
+  owner?: string | null;
+  updated_at?: string;
+};
+
+export async function apiListPipeline(accessToken: string): Promise<{ items: PipelineItem[] }> {
+  const res = await fetch(`${API_BASE}/pipeline`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  return handleResponse(res);
+}
+
+export type TaskItem = {
+  id: string;
+  title: string;
+  due_date?: string;
+  status?: string;
+  priority?: string | null;
+  owner?: string | null;
+  client_name?: string | null;
+};
+
+export async function apiListTasks(accessToken: string): Promise<{ items: TaskItem[] }> {
+  const res = await fetch(`${API_BASE}/tasks`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  return handleResponse(res);
+}
+
+export type RenewalItem = {
+  id: string;
+  client_name?: string | null;
+  policy_number?: string | null;
+  renewal_date?: string;
+  premium?: number | null;
+  status?: string;
+  owner?: string | null;
+};
+
+export async function apiListRenewals(accessToken: string): Promise<{ items: RenewalItem[] }> {
+  const res = await fetch(`${API_BASE}/renewals`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  return handleResponse(res);
+}
+
 export const apiConfig = { API_BASE };
