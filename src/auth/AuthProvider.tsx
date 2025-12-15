@@ -10,6 +10,7 @@ type AuthState = {
 type AuthContextType = {
   isAuthed: boolean;
   user: User | null;
+  token: string | null;
   login: (u: User, token?: string, ttlMinutes?: number) => void;
   logout: () => void;
 };
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const api = useMemo<AuthContextType>(() => ({
     isAuthed: !!state.user && !!state.token && (!state.expiresAt || Date.now() < state.expiresAt),
     user: state.user,
+    token: state.token,
     login: (u, token = "mock-token", ttlMinutes = 120) => {
       const expiresAt = Date.now() + ttlMinutes * 60_000;
       setState({ user: u, token, expiresAt });
