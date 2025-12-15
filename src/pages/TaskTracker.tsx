@@ -1,80 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
 import type { DocumentAttachment } from "../components/UploadModal";
+import { useAuth } from "../auth/AuthProvider";
+import { apiListTasks, type TaskItem } from "../services/api";
 
 type Task = {
   id: string;
   fecha: string;
   cliente: string;
-  movimiento: string;
-  item: string;
-  compania: string;
-  responsable: string;
-  estado: "Pendiente" | "En curso" | "Completado";
-  notas?: string;
+  titulo: string;
+  responsable?: string | null;
+  estado: "Pendiente" | "En curso" | "Completado" | "Sin estado";
 };
 
-const TASKS: Task[] = [
-  {
-    id: "T-101",
-    fecha: "2024-03-12",
-    cliente: "Cliente Demo Uno S.A.",
-    movimiento: "MV-4401",
-    item: "Alquiler",
-    compania: "Porto",
-    responsable: "Valentina",
-    estado: "Pendiente",
-    notas: "Subir planilla de datos y enviar al drive",
-  },
-  {
-    id: "T-102",
-    fecha: "2024-03-12",
-    cliente: "Cliente Demo Dos SRL",
-    movimiento: "SIN-8821",
-    item: "Siniestro",
-    compania: "Sura",
-    responsable: "Rodrigo",
-    estado: "En curso",
-    notas: "Ingresar denuncia en portal y solicitar fotos adicionales",
-  },
-  {
-    id: "T-103",
-    fecha: "2024-03-11",
-    cliente: "Cliente Demo Tres Coop.",
-    movimiento: "MV-4393",
-    item: "Caución",
-    compania: "Sancor",
-    responsable: "María",
-    estado: "Pendiente",
-    notas: "Corregir contrato y reenviar a la compañía",
-  },
-  {
-    id: "T-104",
-    fecha: "2024-03-10",
-    cliente: "Cliente Demo Cuatro Ltda.",
-    movimiento: "REN-3302",
-    item: "Salud",
-    compania: "BSE",
-    responsable: "Andrés",
-    estado: "Completado",
-    notas: "Confirmar altas nuevas y actualizar padrón",
-  },
-  {
-    id: "T-105",
-    fecha: "2024-03-09",
-    cliente: "Cliente Demo Cinco",
-    movimiento: "SIN-8712",
-    item: "Siniestro",
-    compania: "Mapfre",
-    responsable: "Lucía",
-    estado: "En curso",
-    notas: "Coordinar inspección presencial",
-  },
-];
-
 export default function TaskTracker() {
+  const { token } = useAuth();
   const [estado, setEstado] = useState<string>("activos");
   const [search, setSearch] = useState("");
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [attachmentsByTask, setAttachmentsByTask] = useState<
     Record<string, DocumentAttachment[]>
@@ -91,25 +36,51 @@ export default function TaskTracker() {
     [documentCategories]
   );
 
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+
+    apiListTasks(token)
+      .then((data) => {
+        setTasks(
+          data.items.map((task: TaskItem) => ({
+            id: task.id,
+            fecha: task.due_date ?? "",
+            cliente: task.client_name ?? "—",
+            titulo: task.title,
+            responsable: task.owner ?? null,
+            estado:
+              task.status === "pendiente"
+                ? "Pendiente"
+                : task.status === "en curso"
+                  ? "En curso"
+                  : task.status === "completada"
+                    ? "Completado"
+                    : "Sin estado",
+          })),
+        );
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar las gestiones"))
+      .finally(() => setLoading(false));
+  }, [token]);
+
   const agrupadas = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const filtradas = TASKS.filter((task) => {
+    const filtradas = tasks.filter((task) => {
       if (estado === "activos" && task.estado === "Completado") return false;
       if (estado === "completadas" && task.estado !== "Completado") return false;
       if (!q) return true;
-      return (
-        task.cliente.toLowerCase().includes(q) ||
-        task.movimiento.toLowerCase().includes(q) ||
-        task.compania.toLowerCase().includes(q)
-      );
+      return task.cliente.toLowerCase().includes(q) || task.titulo.toLowerCase().includes(q);
     });
 
     return filtradas.reduce<Record<string, Task[]>>((acc, task) => {
-      if (!acc[task.fecha]) acc[task.fecha] = [];
-      acc[task.fecha].push(task);
+      const key = task.fecha || "Sin fecha";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(task);
       return acc;
     }, {});
-  }, [estado, search]);
+  }, [estado, search, tasks]);
 
   const fechas = useMemo(() => Object.keys(agrupadas).sort((a, b) => b.localeCompare(a)), [agrupadas]);
 
@@ -139,14 +110,14 @@ export default function TaskTracker() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-2">
             <label className="block text-sm font-semibold text-slate-700 mb-2" htmlFor="tasks-search">
-              Buscar cliente o movimiento
+              Buscar cliente o tarea
             </label>
             <input
               id="tasks-search"
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Cliente, movimiento o compañía"
+              placeholder="Cliente o título de la tarea"
               className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
             />
           </div>
@@ -169,7 +140,19 @@ export default function TaskTracker() {
         </div>
 
         <div className="mt-6 space-y-6 overflow-auto pr-2">
-          {fechas.length === 0 && (
+          {isLoading && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
+              Cargando gestiones…
+            </div>
+          )}
+
+          {error && !isLoading && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-600">
+              {error}
+            </div>
+          )}
+
+          {fechas.length === 0 && !isLoading && !error && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
               No hay gestiones que coincidan con los filtros seleccionados.
             </div>
@@ -186,13 +169,12 @@ export default function TaskTracker() {
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-slate-900">{task.cliente}</div>
-                        <div className="text-xs text-slate-500">{task.movimiento} · {task.item} · {task.compania}</div>
+                        <div className="text-xs text-slate-500">{task.titulo}</div>
                       </div>
                       <StatusBadge estado={task.estado} />
                     </div>
-                    <div className="mt-3 text-sm text-slate-600">{task.notas ?? "Sin notas"}</div>
                     <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                      <span>Responsable: {task.responsable}</span>
+                      <span>Responsable: {task.responsable ?? "—"}</span>
                       <span>ID: {task.id}</span>
                     </div>
                     <div className="mt-3 rounded-xl border border-dashed border-slate-200 p-3">
@@ -253,6 +235,7 @@ function StatusBadge({ estado }: { estado: Task["estado"] }) {
     Pendiente: "bg-rose-100 text-rose-700",
     "En curso": "bg-amber-100 text-amber-700",
     Completado: "bg-emerald-100 text-emerald-700",
+    "Sin estado": "bg-slate-100 text-slate-600",
   };
 
   return (
@@ -263,6 +246,7 @@ function StatusBadge({ estado }: { estado: Task["estado"] }) {
 }
 
 function formatDate(date: string) {
+  if (!date) return "Sin fecha";
   return new Date(date + "T00:00:00").toLocaleDateString("es-UY", {
     weekday: "short",
     day: "2-digit",

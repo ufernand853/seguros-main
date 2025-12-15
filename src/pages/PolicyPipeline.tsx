@@ -1,97 +1,53 @@
-import { ReactNode, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
 import type { DocumentAttachment } from "../components/UploadModal";
+import { useAuth } from "../auth/AuthProvider";
+import { apiListPipeline, type PipelineItem } from "../services/api";
 
 type PipelineCase = {
   id: string;
   cliente: string;
-  documento: string;
-  compania: string;
-  ramo: string;
-  etapa: "Análisis" | "Documentación" | "Cotización" | "Presentación" | "Seguimiento";
-  tieneSiniestro: boolean;
-  montoAprobado?: number;
-  contacto?: string;
-  observaciones?: string;
-  actualizado: string;
+  etapa?: string;
+  monto?: number | null;
+  probabilidad?: number | null;
+  responsable?: string | null;
+  actualizado?: string | null;
 };
 
-const CASES: PipelineCase[] = [
-  {
-    id: "UTC44079",
-    cliente: "Cliente Demo Uno S.A.",
-    documento: "RUT 99.000.001-001",
-    compania: "Porto",
-    ramo: "Integral PyME",
-    etapa: "Análisis",
-    tieneSiniestro: false,
-    observaciones: "No califican por scoring actual, revisar balance 2023",
-    actualizado: "2024-03-11",
-  },
-  {
-    id: "UTC44110",
-    cliente: "Cliente Demo Dos SRL",
-    documento: "RUT 99.000.002-001",
-    compania: "Sura",
-    ramo: "Todo Riesgo Operativo",
-    etapa: "Documentación",
-    tieneSiniestro: false,
-    observaciones: "Nos piden ratificación de ingresos 2023",
-    actualizado: "2024-03-12",
-  },
-  {
-    id: "UTC44145",
-    cliente: "Cliente Demo Tres Coop.",
-    documento: "RUT 99.000.003-001",
-    compania: "Mapfre",
-    ramo: "Responsabilidad Profesional",
-    etapa: "Cotización",
-    tieneSiniestro: false,
-    montoAprobado: 30000,
-    observaciones: "Máximo de cobertura solicitado 30K",
-    actualizado: "2024-03-08",
-  },
-  {
-    id: "UTC44201",
-    cliente: "Cliente Demo Cuatro Ltda.",
-    documento: "RUT 99.000.004-001",
-    compania: "Sancor",
-    ramo: "Caución Obra Pública",
-    etapa: "Presentación",
-    tieneSiniestro: true,
-    contacto: "comercial@sancor.com",
-    observaciones: "Seguimiento siniestro abierto, presentar descargo",
-    actualizado: "2024-03-14",
-  },
-  {
-    id: "UTC44233",
-    cliente: "Cliente Demo Cinco",
-    documento: "RUT 99.000.005-001",
-    compania: "Porto",
-    ramo: "Accidentes Personales",
-    etapa: "Seguimiento",
-    tieneSiniestro: false,
-    observaciones: "Esperando confirmación de cliente",
-    actualizado: "2024-03-10",
-  },
-];
-
-const STAGES: PipelineCase["etapa"][] = [
-  "Análisis",
-  "Documentación",
-  "Cotización",
-  "Presentación",
-  "Seguimiento",
-];
-
 export default function PolicyPipeline() {
+  const { token } = useAuth();
   const [stageFilter, setStageFilter] = useState<string>("todos");
   const [search, setSearch] = useState("");
-  const [showOnlyOpenClaims, setShowOnlyOpenClaims] = useState(false);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [attachmentsByCase, setAttachmentsByCase] = useState<
     Record<string, DocumentAttachment[]>
   >({});
+  const [cases, setCases] = useState<PipelineCase[]>([]);
+  const [isLoading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+
+    apiListPipeline(token)
+      .then((data) => {
+        setCases(
+          data.items.map((item: PipelineItem) => ({
+            id: item.id,
+            cliente: item.client_name ?? "—",
+            etapa: item.stage ?? "Sin etapa",
+            monto: item.amount ?? null,
+            probabilidad: item.probability ?? null,
+            responsable: item.owner ?? null,
+            actualizado: item.updated_at ?? null,
+          })),
+        );
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el pipeline"))
+      .finally(() => setLoading(false));
+  }, [token]);
 
   const documentCategories = DEFAULT_DOCUMENT_CATEGORIES;
 
@@ -104,41 +60,37 @@ export default function PolicyPipeline() {
     [documentCategories]
   );
 
+  const stages = useMemo(() => {
+    const uniques = new Set<string>();
+    cases.forEach((c) => c.etapa && uniques.add(c.etapa));
+    return Array.from(uniques);
+  }, [cases]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return CASES.filter((item) => {
+    return cases.filter((item) => {
       if (stageFilter !== "todos" && item.etapa !== stageFilter) return false;
-      if (showOnlyOpenClaims && !item.tieneSiniestro) return false;
       if (!q) return true;
-      return (
-        item.cliente.toLowerCase().includes(q) ||
-        item.documento.toLowerCase().includes(q) ||
-        item.compania.toLowerCase().includes(q) ||
-        item.id.toLowerCase().includes(q)
-      );
+      return item.cliente.toLowerCase().includes(q) || item.id.toLowerCase().includes(q);
     });
-  }, [stageFilter, search, showOnlyOpenClaims]);
+  }, [cases, stageFilter, search]);
 
   const summary = useMemo(() => {
-    const total = CASES.length;
-    const byStage = STAGES.reduce(
-      (acc, stage) => {
-        acc[stage] = 0;
-        return acc;
-      },
-      {} as Record<PipelineCase["etapa"], number>
-    );
-    let withDocsPending = 0;
-    let withClaims = 0;
+    const byStage = stages.reduce<Record<string, number>>((acc, stage) => {
+      acc[stage] = 0;
+      return acc;
+    }, {});
 
-    CASES.forEach((item) => {
-      byStage[item.etapa] += 1;
-      if (item.etapa === "Documentación") withDocsPending += 1;
-      if (item.tieneSiniestro) withClaims += 1;
+    cases.forEach((item) => {
+      if (item.etapa) {
+        byStage[item.etapa] = (byStage[item.etapa] ?? 0) + 1;
+      }
     });
 
-    return { total, byStage, withDocsPending, withClaims };
-  }, []);
+    const withDocsPending = cases.filter((item) => item.etapa === "Documentación").length;
+
+    return { total: cases.length, byStage, withDocsPending };
+  }, [cases, stages]);
 
   const closeModal = () => setActiveCaseId(null);
 
@@ -163,8 +115,8 @@ export default function PolicyPipeline() {
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <SummaryCard label="Casos activos" value={summary.total.toString()} highlight />
           <SummaryCard label="Pendientes de documentación" value={summary.withDocsPending.toString()} />
-          <SummaryCard label="Con siniestro asociado" value={summary.withClaims.toString()} />
-          <SummaryCard label="En presentación" value={summary.byStage["Presentación"].toString()} />
+          <SummaryCard label="En presentación" value={(summary.byStage["Presentación"] ?? 0).toString()} />
+          <SummaryCard label="Etapas distintas" value={stages.length.toString()} />
         </div>
       </header>
 
@@ -179,7 +131,7 @@ export default function PolicyPipeline() {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Cliente, documento, compañía o ID"
+              placeholder="Cliente o ID"
               className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
             />
           </div>
@@ -195,23 +147,13 @@ export default function PolicyPipeline() {
               className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
             >
               <option value="todos">Todas</option>
-              {STAGES.map((stage) => (
+              {stages.map((stage) => (
                 <option key={stage} value={stage}>
                   {stage}
                 </option>
               ))}
             </select>
           </div>
-
-          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={showOnlyOpenClaims}
-              onChange={(event) => setShowOnlyOpenClaims(event.target.checked)}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Mostrar solo casos con siniestro
-          </label>
         </div>
 
         <div className="mt-6 overflow-auto -mx-4 md:mx-0">
@@ -220,11 +162,10 @@ export default function PolicyPipeline() {
               <tr>
                 <th className="px-4 py-3 font-semibold">ID</th>
                 <th className="px-4 py-3 font-semibold">Cliente</th>
-                <th className="px-4 py-3 font-semibold">Compañía</th>
-                <th className="px-4 py-3 font-semibold">Ramo</th>
                 <th className="px-4 py-3 font-semibold">Etapa</th>
-                <th className="px-4 py-3 font-semibold">Monto aprobado</th>
-                <th className="px-4 py-3 font-semibold">Notas</th>
+                <th className="px-4 py-3 font-semibold">Probabilidad</th>
+                <th className="px-4 py-3 font-semibold">Monto</th>
+                <th className="px-4 py-3 font-semibold">Responsable</th>
                 <th className="px-4 py-3 font-semibold">Actualizado</th>
                 <th className="px-4 py-3 font-semibold">Documentos</th>
               </tr>
@@ -235,27 +176,26 @@ export default function PolicyPipeline() {
                   <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.id}</td>
                   <td className="px-4 py-3">
                     <div className="font-semibold text-slate-900">{item.cliente}</div>
-                    <div className="text-xs text-slate-500">{item.documento}</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="text-sm text-slate-800">{item.compania}</div>
-                    {item.tieneSiniestro && <Badge tone="amber">Siniestro</Badge>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{item.ramo}</td>
                   <td className="px-4 py-3">
                     <Badge tone="indigo">{item.etapa}</Badge>
                   </td>
                   <td className="px-4 py-3 text-slate-700">
-                    {typeof item.montoAprobado === "number"
+                    {typeof item.probabilidad === "number"
+                      ? `${Math.round(item.probabilidad * 100)}%`
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {typeof item.monto === "number"
                       ? new Intl.NumberFormat("es-UY", {
                           style: "currency",
                           currency: "USD",
                           maximumFractionDigits: 0,
-                        }).format(item.montoAprobado)
+                        }).format(item.monto)
                       : "—"}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 text-sm">{item.observaciones ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500">{item.actualizado}</td>
+                  <td className="px-4 py-3 text-slate-700">{item.responsable ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-slate-500">{item.actualizado ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-2">
                       {attachmentsByCase[item.id]?.length ? (

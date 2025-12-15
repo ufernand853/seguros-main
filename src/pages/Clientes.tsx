@@ -1,20 +1,39 @@
 // src/pages/Clientes.tsx
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+import { apiListClients, type ClientListItem } from "../services/api";
 
-type Cliente = { id: string; nombre: string; doc?: string; ciudad?: string };
-const MOCK: Cliente[] = [
-  { id: "1", nombre: "Cliente Demo Uno S.A.", doc: "RUT 99.000.001-001", ciudad: "Ciudad Norte" },
-  { id: "2", nombre: "Cliente Demo Dos SRL", doc: "RUT 99.000.002-001", ciudad: "Ciudad Sur" },
-  { id: "3", nombre: "Cliente Demo Tres Coop.", doc: "RUT 99.000.003-001", ciudad: "Ciudad Este" },
-  { id: "4", nombre: "Cliente Demo Cuatro Ltda.", doc: "RUT 99.000.004-001", ciudad: "Ciudad Oeste" },
-  { id: "5", nombre: "Cliente Demo Cinco", doc: "RUT 99.000.005-001", ciudad: "Ciudad Central" },
-];
+type Cliente = { id: string; nombre: string; doc?: string; ciudad?: string | null };
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const { token } = useAuth();
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState(q);
+  const [isLoading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+
+    apiListClients(token)
+      .then((data) => {
+        setClientes(
+          data.items.map((item: ClientListItem) => ({
+            id: item.id,
+            nombre: item.name,
+            doc: item.document,
+            ciudad: item.city ?? null,
+          })),
+        );
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los clientes"))
+      .finally(() => setLoading(false));
+  }, [token]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim().toLowerCase()), 160);
@@ -22,13 +41,14 @@ export default function Clientes() {
   }, [q]);
 
   const resultados = useMemo(() => {
-    if (!debounced) return MOCK;
-    return MOCK.filter(c =>
-      (c.nombre?.toLowerCase().includes(debounced)) ||
-      (c.doc?.toLowerCase().includes(debounced)) ||
-      (c.ciudad?.toLowerCase().includes(debounced))
+    if (!debounced) return clientes;
+    return clientes.filter(
+      (c) =>
+        c.nombre?.toLowerCase().includes(debounced) ||
+        c.doc?.toLowerCase().includes(debounced) ||
+        c.ciudad?.toLowerCase().includes(debounced),
     );
-  }, [debounced]);
+  }, [clientes, debounced]);
 
   const open = (c: Cliente) => navigate(`/clientes?sel=${encodeURIComponent(c.id)}`);
 
@@ -86,7 +106,11 @@ export default function Clientes() {
 
       {/* Resultados */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-2 md:p-3 overflow-auto">
-        {resultados.length === 0 ? (
+        {isLoading ? (
+          <div className="h-full flex items-center justify-center text-slate-500">Cargando clientes…</div>
+        ) : error ? (
+          <div className="h-full flex items-center justify-center text-red-600 text-center px-4">{error}</div>
+        ) : resultados.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-500 text-center px-4">
             No se encontraron clientes para “{q}”.<br />
             <button onClick={nuevo} className="mt-3 underline text-emerald-700 hover:text-emerald-800">
