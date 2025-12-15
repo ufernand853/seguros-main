@@ -159,12 +159,67 @@ app.get("/clients", authenticate, async (_req, res) => {
   }
 });
 
+app.post("/clients", authenticate, async (req, res) => {
+  const { name, document, city, contacts, policies } = req.body || {};
+  if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
+
+  const clientDoc = {
+    _id: randomUUID(),
+    name,
+    document,
+    city: city ?? null,
+    contacts: Array.isArray(contacts)
+      ? contacts.map((contact) => ({
+          id: contact.id ?? randomUUID(),
+          name: contact.name ?? "",
+          email: contact.email ?? null,
+          phone: contact.phone ?? null,
+        }))
+      : [],
+    policies: Array.isArray(policies)
+      ? policies.map((policy) => ({
+          id: policy.id ?? randomUUID(),
+          type: policy.type ?? null,
+          insurer_id: policy.insurer_id ?? null,
+          status: policy.status ?? null,
+          premium: typeof policy.premium === "number" ? policy.premium : null,
+          next_renewal: policy.next_renewal ? new Date(policy.next_renewal) : null,
+        }))
+      : [],
+    created_at: new Date(),
+  };
+
+  try {
+    const db = getDb();
+    await db.collection("clients").insertOne(clientDoc);
+    res.status(201).json(mapDocument(clientDoc));
+  } catch (err) {
+    console.error("[clients create]", err);
+    res.status(500).json({ error: "No se pudo crear el cliente" });
+  }
+});
+
 app.get("/clients/:id/summary", authenticate, async (req, res) => {
   const clientId = req.params.id;
   try {
     const db = getDb();
     const clientDoc = await db.collection("clients").findOne({ _id: clientId });
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
+
+    const insurerIds = (clientDoc.policies ?? [])
+      .map((p) => p.insurer_id)
+      .filter((id) => typeof id === "string");
+    const insurersLookup = insurerIds.length
+      ? await db
+          .collection("insurers")
+          .find({ _id: { $in: insurerIds } })
+          .toArray()
+      : [];
+
+    const insurersById = insurersLookup.reduce((acc, row) => {
+      acc[row._id] = row;
+      return acc;
+    }, {});
 
     const tasks = await db
       .collection("tasks")
@@ -187,8 +242,14 @@ app.get("/clients/:id/summary", authenticate, async (req, res) => {
     const tasksMapped = tasks.map(mapDocument);
     const nextTask = tasksMapped.find((t) => t.status !== "completada") || null;
 
+    const policies = (clientDoc.policies ?? []).map((policy) => ({
+      ...policy,
+      insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+    }));
+
     res.json({
       ...mapDocument(clientDoc),
+      policies,
       tasks: tasksMapped,
       opportunity: mapDocument(opportunities[0]) || null,
       renewal: mapDocument(renewalRows[0]) || null,
@@ -312,6 +373,54 @@ app.get("/renewals", authenticate, async (_req, res) => {
   } catch (err) {
     console.error("[renewals]", err);
     res.status(500).json({ error: "No se pudieron recuperar las renovaciones" });
+  }
+});
+
+app.get("/insurers", authenticate, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db.collection("insurers").find({}).sort({ name: 1 }).toArray();
+    res.json({ items: rows.map(mapDocument) });
+  } catch (err) {
+    console.error("[insurers]", err);
+    res.status(500).json({ error: "No se pudieron recuperar las aseguradoras" });
+  }
+});
+
+app.post("/insurers", authenticate, async (req, res) => {
+  const { name, country, lines, status, rating, contact, key_deals, last_review, notes } = req.body || {};
+  if (!name) return res.status(400).json({ error: "Nombre requerido" });
+
+  const insurerDoc = {
+    _id: randomUUID(),
+    name,
+    country: country ?? null,
+    lines: Array.isArray(lines) ? lines : [],
+    status: status ?? "Activa",
+    rating: typeof rating === "number" ? rating : null,
+    annual_premium: null,
+    active_policies: null,
+    loss_ratio: null,
+    contact: contact
+      ? {
+          name: contact.name ?? null,
+          email: contact.email ?? null,
+          phone: contact.phone ?? null,
+        }
+      : null,
+    key_deals: Array.isArray(key_deals) ? key_deals : [],
+    last_review: last_review ? new Date(last_review) : null,
+    notes: notes ?? null,
+    created_at: new Date(),
+  };
+
+  try {
+    const db = getDb();
+    await db.collection("insurers").insertOne(insurerDoc);
+    res.status(201).json(mapDocument(insurerDoc));
+  } catch (err) {
+    console.error("[insurers create]", err);
+    res.status(500).json({ error: "No se pudo crear la aseguradora" });
   }
 });
 

@@ -1,63 +1,198 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import { closeConnection, connectToDatabase } from "../db.js";
 
 const userId = "b9c2e5c2-2e8b-4c7d-8b57-c5a5dc0ef501";
+
+const insurers = [
+  {
+    _id: "CAR-001",
+    name: "Seguros Río de la Plata",
+    country: "Uruguay",
+    lines: ["Automotor", "Hogar", "Vida"],
+    status: "Activa",
+    rating: 4.6,
+    annual_premium: 2_450_000,
+    active_policies: 1260,
+    loss_ratio: 42,
+    contact: {
+      name: "Laura Martínez",
+      email: "lmartinez@rioplata.com",
+      phone: "+598 92 455 110",
+    },
+    key_deals: ["Descuento flotas corporativas", "Cobertura hogares premium"],
+    last_review: new Date("2024-03-15"),
+    notes: "Requiere reporte trimestral de producción.",
+  },
+  {
+    _id: "CAR-002",
+    name: "Andes Reaseguros",
+    country: "Chile",
+    lines: ["Caución", "Ingeniería"],
+    status: "En revisión",
+    rating: 4.1,
+    annual_premium: 1_875_000,
+    active_policies: 720,
+    loss_ratio: 36,
+    contact: {
+      name: "Patricio González",
+      email: "pgonzalez@andesre.com",
+      phone: "+56 9 3456 2100",
+    },
+    key_deals: ["Capacidad ampliada para cauciones", "Inspección técnica incluida"],
+    last_review: new Date("2024-02-28"),
+  },
+  {
+    _id: "CAR-003",
+    name: "Atlántida Salud",
+    country: "Argentina",
+    lines: ["Salud"],
+    status: "Activa",
+    rating: 4.8,
+    annual_premium: 3_280_000,
+    active_policies: 1980,
+    loss_ratio: 31,
+    contact: {
+      name: "Cecilia Robledo",
+      email: "crobledo@atlantidasalud.com",
+      phone: "+54 9 11 3880 2201",
+    },
+    key_deals: ["Planes corporativos con upgrade dental", "Bonificación por baja siniestralidad"],
+    last_review: new Date("2024-04-07"),
+    notes: "Solicitar actualización de cuadros médicos 2024.",
+  },
+  {
+    _id: "CAR-004",
+    name: "Protec Industrial",
+    country: "Brasil",
+    lines: ["Riesgos industriales", "Responsabilidad civil"],
+    status: "Suspendida",
+    rating: 3.2,
+    annual_premium: 960_000,
+    active_policies: 310,
+    loss_ratio: 58,
+    contact: {
+      name: "Rafael Souza",
+      email: "rsouza@protecbiz.com",
+      phone: "+55 21 99540 8877",
+    },
+    key_deals: ["Coberturas para construcción con franquicia", "Asistencia ambiental 24/7"],
+    last_review: new Date("2024-01-19"),
+    notes: "Suspendida temporalmente por auditoría de compliance.",
+  },
+  {
+    _id: "CAR-005",
+    name: "Mutual del Litoral",
+    country: "Uruguay",
+    lines: ["Vida", "Ahorro"],
+    status: "Activa",
+    rating: 4.3,
+    annual_premium: 1_520_000,
+    active_policies: 890,
+    loss_ratio: 28,
+    contact: {
+      name: "Gonzalo Cabrera",
+      email: "gcabrera@mutuallitoral.com",
+      phone: "+598 95 887 432",
+    },
+    key_deals: ["Campaña educativa para productores", "Bonificación de comisiones por metas trimestrales"],
+    last_review: new Date("2024-03-02"),
+  },
+  {
+    _id: "CAR-006",
+    name: "Latam Seguros Generales",
+    country: "Perú",
+    lines: ["Automotor", "PYMES", "Transporte"],
+    status: "En revisión",
+    rating: 3.9,
+    annual_premium: 2_040_000,
+    active_policies: 1045,
+    loss_ratio: 47,
+    contact: {
+      name: "María Fernanda Salas",
+      email: "mfsalas@latamgenerales.com",
+      phone: "+51 987 665 432",
+    },
+    key_deals: ["Cobertura transporte internacional", "Programa de telemetría para flotas"],
+    last_review: new Date("2024-03-27"),
+  },
+];
+
 const clients = [
   {
-    _id: "8a7b1b2f-1b8f-4a74-9d1d-6d6a3b7fa101",
-    name: "María López",
-    email: "maria.lopez@example.com",
-    phone: "+34 600 123 456",
-    status: "activa",
-    premium: 1250.5,
-    policy_type: "Hogar",
-    policy_number: "HOG-1022",
-    renewal_date: new Date("2025-12-01"),
-    last_contact: new Date("2025-10-05"),
-    risk_level: "medio",
+    _id: "c1e81378-a53a-4c53-92c8-4e5f0c2d1e11",
+    name: "Cliente Demo Uno S.A.",
+    document: "RUT 99.000.001-001",
+    city: "Ciudad Norte",
+    contacts: [
+      { id: randomUUID(), name: "María Gómez", email: "maria@cliente1.com", phone: "+598 98 111 111" },
+      { id: randomUUID(), name: "Juan Pérez", email: "juan@cliente1.com", phone: "+598 92 222 222" },
+    ],
+    policies: [
+      {
+        id: randomUUID(),
+        type: "Automotor flota",
+        insurer_id: insurers[0]._id,
+        status: "Vigente",
+        premium: 3200,
+        next_renewal: new Date("2026-02-10"),
+      },
+    ],
     created_at: new Date("2025-10-01"),
   },
   {
-    _id: "f3c3c5a1-2c1d-4d6d-9f9f-2e5c5e4d7202",
-    name: "Jorge Ramírez",
-    email: "jorge.ramirez@example.com",
-    phone: "+34 600 222 777",
-    status: "en_riesgo",
-    premium: 850.0,
-    policy_type: "Auto",
-    policy_number: "AUT-2311",
-    renewal_date: new Date("2025-11-15"),
-    last_contact: new Date("2025-10-08"),
-    risk_level: "alto",
+    _id: "b6b12c25-23bb-4473-9fdd-2e70c1a9ab22",
+    name: "Cliente Demo Dos SRL",
+    document: "RUT 99.000.002-001",
+    city: "Ciudad Sur",
+    contacts: [{ id: randomUUID(), name: "Lucía Rodríguez", email: "lucia@cliente2.com", phone: "+598 93 333 333" }],
+    policies: [
+      {
+        id: randomUUID(),
+        type: "Hogar premium",
+        insurer_id: insurers[4]._id,
+        status: "Pendiente de emisión",
+        premium: 1200,
+        next_renewal: new Date("2025-12-01"),
+      },
+    ],
     created_at: new Date("2025-10-02"),
   },
   {
-    _id: "d1a1e3b4-0d0e-4c0b-b2c2-6a7f8d9e3303",
-    name: "Lucía Soto",
-    email: "lucia.soto@example.com",
-    phone: "+34 611 888 900",
-    status: "nueva",
-    premium: 460.0,
-    policy_type: "Vida",
-    policy_number: "VID-9812",
-    renewal_date: new Date("2026-01-20"),
-    last_contact: new Date("2025-10-10"),
-    risk_level: "bajo",
-    created_at: new Date("2025-10-04"),
+    _id: "f6d0a07e-875d-4cd5-9a78-5325f5f9c833",
+    name: "Cliente Demo Tres Coop.",
+    document: "RUT 99.000.003-001",
+    city: "Ciudad Este",
+    contacts: [{ id: randomUUID(), name: "Carlos Méndez", email: "carlos@cliente3.com", phone: "+598 90 444 444" }],
+    policies: [
+      {
+        id: randomUUID(),
+        type: "Vida familiar",
+        insurer_id: insurers[2]._id,
+        status: "Vigente",
+        premium: 460,
+        next_renewal: new Date("2026-01-20"),
+      },
+    ],
+    created_at: new Date("2025-10-03"),
   },
   {
-    _id: "a4d5f6c7-8e9f-4a1b-9c2d-5e6f7a8b9404",
-    name: "Seguros Rivera S.L.",
-    email: "contacto@rivera.example.com",
-    phone: "+34 699 555 121",
-    status: "activa",
-    premium: 3250.0,
-    policy_type: "Empresa",
-    policy_number: "EMP-4432",
-    renewal_date: new Date("2026-03-30"),
-    last_contact: new Date("2025-10-09"),
-    risk_level: "medio",
-    created_at: new Date("2025-10-03"),
+    _id: "0d0f7c6d-2f62-4f9b-8d12-8f7a2f1783c4",
+    name: "Cliente Demo Cuatro Ltda.",
+    document: "RUT 99.000.004-001",
+    city: "Ciudad Oeste",
+    contacts: [{ id: randomUUID(), name: "Ana Torres", email: "ana@cliente4.com", phone: "+598 94 555 555" }],
+    policies: [
+      {
+        id: randomUUID(),
+        type: "Multirriesgo pyme",
+        insurer_id: insurers[3]._id,
+        status: "Vigente",
+        premium: 3200,
+        next_renewal: new Date("2026-03-30"),
+      },
+    ],
+    created_at: new Date("2025-10-04"),
   },
 ];
 
@@ -200,8 +335,10 @@ async function seed() {
   await db.collection("pipeline").deleteMany({});
   await db.collection("tasks").deleteMany({});
   await db.collection("renewals").deleteMany({});
+  await db.collection("insurers").deleteMany({});
 
   await db.collection("users").insertOne(user);
+  await db.collection("insurers").insertMany(insurers);
   await db.collection("clients").insertMany(clients);
   await db.collection("pipeline").insertMany(pipeline);
   await db.collection("tasks").insertMany(tasks);
@@ -218,3 +355,4 @@ seed()
   .finally(async () => {
     await closeConnection();
   });
+
