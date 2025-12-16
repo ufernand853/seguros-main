@@ -53,6 +53,7 @@ VITE_API_URL=http://localhost:4000
 - Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente.
+- Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4000/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta.
 
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder

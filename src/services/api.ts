@@ -17,22 +17,34 @@ async function handleResponse(res: Response) {
   return data;
 }
 
+async function request(path: string, options: RequestInit) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, options);
+    return handleResponse(res);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        `No se pudo conectar con el API en ${API_BASE}. Verifica que el backend esté en marcha y que la variable VITE_API_URL apunte a la URL correcta.`,
+      );
+    }
+    throw error;
+  }
+}
+
 export async function apiLogin(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  return request("/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  return handleResponse(res);
 }
 
 export async function apiRefresh(refreshToken: string): Promise<{ accessToken: string; expiresInSeconds: number }> {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
+  return request("/auth/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refreshToken }),
   });
-  return handleResponse(res);
 }
 
 export type CreateClientPayload = {
@@ -43,7 +55,7 @@ export type CreateClientPayload = {
 };
 
 export async function apiCreateClient(payload: CreateClientPayload, accessToken: string) {
-  const res = await fetch(`${API_BASE}/clients`, {
+  return request("/clients", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -51,7 +63,6 @@ export async function apiCreateClient(payload: CreateClientPayload, accessToken:
     },
     body: JSON.stringify(payload),
   });
-  return handleResponse(res);
 }
 
 export type ClientListItem = {
@@ -62,12 +73,11 @@ export type ClientListItem = {
 };
 
 export async function apiListClients(accessToken: string): Promise<{ items: ClientListItem[] }> {
-  const res = await fetch(`${API_BASE}/clients`, {
+  return request("/clients", {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  return handleResponse(res);
 }
 
 export type PipelineItem = {
@@ -82,12 +92,11 @@ export type PipelineItem = {
 };
 
 export async function apiListPipeline(accessToken: string): Promise<{ items: PipelineItem[] }> {
-  const res = await fetch(`${API_BASE}/pipeline`, {
+  return request("/pipeline", {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  return handleResponse(res);
 }
 
 export type TaskItem = {
@@ -101,12 +110,11 @@ export type TaskItem = {
 };
 
 export async function apiListTasks(accessToken: string): Promise<{ items: TaskItem[] }> {
-  const res = await fetch(`${API_BASE}/tasks`, {
+  return request("/tasks", {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  return handleResponse(res);
 }
 
 export type RenewalItem = {
@@ -120,12 +128,11 @@ export type RenewalItem = {
 };
 
 export async function apiListRenewals(accessToken: string): Promise<{ items: RenewalItem[] }> {
-  const res = await fetch(`${API_BASE}/renewals`, {
+  return request("/renewals", {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  return handleResponse(res);
 }
 
 export const apiConfig = { API_BASE };
