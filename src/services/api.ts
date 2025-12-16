@@ -115,11 +115,13 @@ export async function apiListPipeline(accessToken: string): Promise<{ items: Pip
 
 export type TaskItem = {
   id: string;
+  client_id?: string | null;
   title: string;
   due_date?: string;
   status?: string;
   priority?: string | null;
-  owner?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
   client_name?: string | null;
 };
 
@@ -128,6 +130,41 @@ export async function apiListTasks(accessToken: string): Promise<{ items: TaskIt
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+  });
+}
+
+export type CreateTaskPayload = {
+  title: string;
+  client_id?: string | null;
+  due_date?: string | null;
+  status?: string;
+  priority?: string | null;
+  owner_id?: string | null;
+};
+
+export async function apiCreateTask(payload: CreateTaskPayload, accessToken: string): Promise<TaskItem> {
+  return request("/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdateTask(
+  taskId: string,
+  payload: Partial<CreateTaskPayload>,
+  accessToken: string,
+): Promise<TaskItem> {
+  return request(`/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -200,69 +237,19 @@ export async function apiCreateInsurer(payload: CreateInsurerPayload, accessToke
   });
 }
 
-export type ClaimItem = {
+export type Employee = {
   id: string;
-  client_id: string;
-  client_name?: string | null;
-  client_document?: string | null;
-  policy_id?: string | null;
-  policy_type?: string | null;
-  insurer_name?: string | null;
-  type?: string | null;
-  event_date?: string | null;
-  event_time?: string | null;
-  location?: string | null;
-  description?: string | null;
-  priority?: string | null;
-  channel?: string | null;
-  status?: string | null;
-  third_party_damage?: boolean;
-  tow_needed?: boolean;
-  internal_owner?: string | null;
-  notify_client?: boolean;
-  notify_broker?: boolean;
-  notes?: string | null;
-  contact_email?: string | null;
-  contact_phone?: string | null;
-  created_at?: string | null;
+  name: string;
+  email?: string | null;
+  role?: string | null;
+  team?: string | null;
 };
 
-export type CreateClaimPayload = {
-  client_id: string;
-  policy_id: string;
-  type: string;
-  event_date: string;
-  event_time?: string | null;
-  location: string;
-  description: string;
-  priority?: string | null;
-  channel?: string | null;
-  internal_owner?: string | null;
-  third_party_damage?: boolean;
-  tow_needed?: boolean;
-  notify_client?: boolean;
-  notify_broker?: boolean;
-  notes?: string | null;
-  contact_email?: string | null;
-  contact_phone?: string | null;
-};
-
-export async function apiListClaims(accessToken: string): Promise<{ items: ClaimItem[] }> {
-  return request("/claims", {
+export async function apiListEmployees(accessToken: string): Promise<{ items: Employee[] }> {
+  return request("/employees", {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
-  });
-}
-
-export async function apiCreateClaim(payload: CreateClaimPayload, accessToken: string): Promise<{ item: ClaimItem }> {
-  return request("/claims", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
   });
 }
 
