@@ -118,6 +118,37 @@ const insurers = [
   },
 ];
 
+const employees = [
+  {
+    _id: "emp-ana",
+    name: "Ana Torres",
+    email: "ana.torres@seguros.test",
+    role: "Operaciones",
+    team: "Backoffice",
+  },
+  {
+    _id: "emp-carlos",
+    name: "Carlos Méndez",
+    email: "carlos.mendez@seguros.test",
+    role: "Ejecutivo Comercial",
+    team: "Comercial",
+  },
+  {
+    _id: "emp-isabel",
+    name: "Isabel Romero",
+    email: "isabel.romero@seguros.test",
+    role: "Ejecutivo Comercial",
+    team: "Comercial",
+  },
+  {
+    _id: "emp-luis",
+    name: "Luis Pereira",
+    email: "luis.pereira@seguros.test",
+    role: "Operaciones",
+    team: "Backoffice",
+  },
+];
+
 const clients = [
   {
     _id: "c1e81378-a53a-4c53-92c8-4e5f0c2d1e11",
@@ -245,36 +276,44 @@ const tasks = [
     client_id: clients[1]._id,
     title: "Enviar propuesta de auto",
     due_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2),
-    owner: "Carlos",
+    owner_id: employees[1]._id,
     status: "pendiente",
     priority: "alta",
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
+    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
   },
   {
     _id: "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d",
     client_id: clients[0]._id,
     title: "Llamar para revisión hogar",
     due_date: new Date(Date.now() + 1000 * 60 * 60 * 24),
-    owner: "Luis",
+    owner_id: employees[3]._id,
     status: "pendiente",
     priority: "media",
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 12),
+    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 12),
   },
   {
     _id: "7b8c9d0e-1f2a-4b3c-9d4e-5f6a7b8c9d0e",
     client_id: clients[2]._id,
     title: "Agendar visita familiar",
     due_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 4),
-    owner: "Isabel",
+    owner_id: employees[2]._id,
     status: "pendiente",
     priority: "media",
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 6),
+    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 6),
   },
   {
     _id: "8c9d0e1f-2a3b-4c5d-9e6f-7a8b9c0d1e2f",
     client_id: null,
     title: "Revisar pólizas corporativas",
     due_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3),
-    owner: "Ana",
-    status: "en_progreso",
+    owner_id: employees[0]._id,
+    status: "en_curso",
     priority: "alta",
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 3),
+    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 3),
   },
 ];
 
@@ -390,10 +429,12 @@ async function seed() {
   await db.collection("renewals").deleteMany({});
   await db.collection("claims").deleteMany({});
   await db.collection("insurers").deleteMany({});
+  await db.collection("employees").deleteMany({});
 
   await db.collection("users").insertOne(user);
   await db.collection("insurers").insertMany(insurers);
   await db.collection("clients").insertMany(clients);
+  await db.collection("employees").insertMany(employees);
   await db.collection("pipeline").insertMany(pipeline);
   await db.collection("tasks").insertMany(tasks);
   await db.collection("renewals").insertMany(renewals);
