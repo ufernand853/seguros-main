@@ -356,6 +356,59 @@ const renewals = [
   },
 ];
 
+const claims = [
+  {
+    _id: "a09f3f0d-62c2-4a6a-9e6b-0b31f0f7e7c1",
+    client_id: clients[0]._id,
+    policy_id: clients[0].policies[0].id,
+    policy_type: clients[0].policies[0].type,
+    insurer_id: clients[0].policies[0].insurer_id,
+    type: "Automotor",
+    event_date: new Date("2025-10-05"),
+    event_time: "16:30",
+    location: "Av. Italia y Propios, Montevideo",
+    description: "Choque leve, pendiente confirmación de tercero.",
+    priority: "Alta",
+    channel: "WhatsApp",
+    status: "Inspección agendada",
+    third_party_damage: true,
+    tow_needed: false,
+    internal_owner: "Equipo Siniestros",
+    notify_client: true,
+    notify_broker: true,
+    notes: "Solicitar fotos adicionales del lateral derecho.",
+    contact_email: clients[0].contacts[0].email,
+    contact_phone: clients[0].contacts[0].phone,
+    created_at: new Date("2025-10-05T18:00:00Z"),
+    updated_at: new Date("2025-10-06T12:00:00Z"),
+  },
+  {
+    _id: "c1420ed4-e098-4e04-83dc-1d1c46cb7b1d",
+    client_id: clients[1]._id,
+    policy_id: clients[1].policies[0].id,
+    policy_type: clients[1].policies[0].type,
+    insurer_id: clients[1].policies[0].insurer_id,
+    type: "Hogar",
+    event_date: new Date("2025-09-18"),
+    event_time: "09:15",
+    location: "Paysandú 1234, Ciudad Sur",
+    description: "Ingreso de agua por rotura de cañería, sin daños a terceros.",
+    priority: "Media",
+    channel: "Email",
+    status: "Denuncia ingresada",
+    third_party_damage: false,
+    tow_needed: false,
+    internal_owner: "Backoffice",
+    notify_client: true,
+    notify_broker: false,
+    notes: "Coordinar inspección con servicio técnico de aseguradora.",
+    contact_email: clients[1].contacts[0].email,
+    contact_phone: clients[1].contacts[0].phone,
+    created_at: new Date("2025-09-18T14:00:00Z"),
+    updated_at: new Date("2025-09-18T14:00:00Z"),
+  },
+];
+
 const user = {
   _id: userId,
   name: "Admin Demo",
@@ -374,6 +427,7 @@ async function seed() {
   await db.collection("pipeline").deleteMany({});
   await db.collection("tasks").deleteMany({});
   await db.collection("renewals").deleteMany({});
+  await db.collection("claims").deleteMany({});
   await db.collection("insurers").deleteMany({});
   await db.collection("employees").deleteMany({});
 
@@ -384,6 +438,7 @@ async function seed() {
   await db.collection("pipeline").insertMany(pipeline);
   await db.collection("tasks").insertMany(tasks);
   await db.collection("renewals").insertMany(renewals);
+  await db.collection("claims").insertMany(claims);
 
   console.log("✅ Base de datos Mongo sembrada con datos de demo");
 }

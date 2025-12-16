@@ -71,6 +71,19 @@ export type ClientListItem = {
   name: string;
   document?: string;
   city?: string | null;
+  contacts?: ContactInfo[];
+  policies?: PolicySummary[];
+};
+
+export type ContactInfo = { id?: string; name?: string; email?: string | null; phone?: string | null };
+export type PolicySummary = {
+  id: string;
+  type?: string | null;
+  insurer_id?: string | null;
+  insurer?: string | null;
+  status?: string | null;
+  premium?: number | null;
+  next_renewal?: string | null;
 };
 
 export async function apiListClients(accessToken: string): Promise<{ items: ClientListItem[] }> {
