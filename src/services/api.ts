@@ -125,6 +125,48 @@ export type TaskItem = {
   client_name?: string | null;
 };
 
+export type CreateTaskPayload = {
+  title: string;
+  client_id?: string | null;
+  owner_id?: string | null;
+  due_date?: string | null;
+  status?: string;
+};
+
+export type UpdateTaskPayload = Partial<{
+  title: string;
+  client_id: string | null;
+  owner_id: string | null;
+  due_date: string | null;
+  status: string;
+}>;
+
+export async function apiCreateTask(payload: CreateTaskPayload, accessToken: string): Promise<TaskItem> {
+  return request("/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdateTask(
+  taskId: string,
+  payload: UpdateTaskPayload,
+  accessToken: string,
+): Promise<TaskItem> {
+  return request(`/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function apiListTasks(accessToken: string): Promise<{ items: TaskItem[] }> {
   return request("/tasks", {
     headers: {
@@ -139,6 +181,8 @@ export type EmployeeItem = {
   role?: string | null;
   email?: string | null;
 };
+
+export type Employee = EmployeeItem;
 
 export async function apiListEmployees(accessToken: string): Promise<{ items: EmployeeItem[] }> {
   try {
