@@ -7,6 +7,11 @@ type Policy = {
   numero: string;
   vigenciaDesde: string;
   vigenciaHasta: string;
+  prima?: number;
+  deducible?: string;
+  beneficiario?: string;
+  formaPago?: string;
+  estado?: string;
 };
 
 type Claim = {
@@ -33,6 +38,13 @@ const CLAIM_STATES: Claim["estado"][] = [
   "Finalizado",
 ];
 
+const PAYMENT_METHODS = [
+  "Débito automático",
+  "Transferencia mensual",
+  "Tarjeta de crédito",
+  "Efectivo en agencia",
+];
+
 const INSURERS = [
   "Porto",
   "Mapfre",
@@ -49,6 +61,11 @@ const INITIAL_POLICIES: Policy[] = [
     numero: "AU-2024-0345",
     vigenciaDesde: "2024-02-01",
     vigenciaHasta: "2025-01-31",
+    prima: 450,
+    deducible: "USD 500",
+    beneficiario: "Titular",
+    formaPago: "Débito automático",
+    estado: "Vigente",
   },
   {
     id: "pol-101",
@@ -57,6 +74,11 @@ const INITIAL_POLICIES: Policy[] = [
     numero: "VC-2023-0911",
     vigenciaDesde: "2023-09-01",
     vigenciaHasta: "2024-08-31",
+    prima: 320,
+    deducible: "Sin deducible",
+    beneficiario: "Colaboradores",
+    formaPago: "Transferencia mensual",
+    estado: "Vigente",
   },
 ];
 
@@ -92,7 +114,14 @@ export default function ClientesPolizasDemo() {
     numero: "",
     vigenciaDesde: "",
     vigenciaHasta: "",
+    prima: "",
+    deducible: "",
+    beneficiario: "Titular",
+    formaPago: PAYMENT_METHODS[0],
   });
+
+  const [constancia, setConstancia] = useState<Policy | null>(null);
+  const [constanciaMensaje, setConstanciaMensaje] = useState("");
 
   const [claimForm, setClaimForm] = useState({
     descripcion: "",
@@ -108,22 +137,34 @@ export default function ClientesPolizasDemo() {
   const nextClaimId = useMemo(() => `sin-${50 + claims.length + 1}`, [claims.length]);
 
   const addPolicy = () => {
-    if (!form.numero || !form.vigenciaDesde || !form.vigenciaHasta) {
+    if (!form.vigenciaDesde || !form.vigenciaHasta) {
       return;
     }
+
+    const generatedNumber = form.numero || `${form.ramo.slice(0, 3).toUpperCase()}-${new Date().getFullYear()}-${String(100 + policies.length).padStart(4, "0")}`;
 
     const newPolicy: Policy = {
       id: nextPolicyId,
       ramo: form.ramo,
       aseguradora: form.aseguradora,
-      numero: form.numero,
+      numero: generatedNumber,
       vigenciaDesde: form.vigenciaDesde,
       vigenciaHasta: form.vigenciaHasta,
+      prima: form.prima ? Number(form.prima) : undefined,
+      deducible: form.deducible || undefined,
+      beneficiario: form.beneficiario || undefined,
+      formaPago: form.formaPago,
+      estado: "Generada",
     };
 
     setPolicies((prev) => [...prev, newPolicy]);
-    setForm({ ramo: POLICY_RAMO[0], aseguradora: INSURERS[0], numero: "", vigenciaDesde: "", vigenciaHasta: "" });
+    setForm({ ramo: POLICY_RAMO[0], aseguradora: INSURERS[0], numero: "", vigenciaDesde: "", vigenciaHasta: "", prima: "", deducible: "", beneficiario: "Titular", formaPago: PAYMENT_METHODS[0] });
     setSelectedPolicyId(newPolicy.id);
+
+    setConstancia(newPolicy);
+    setConstanciaMensaje(
+      `Póliza ${generatedNumber} generada para ${newPolicy.aseguradora}. Listo para enviar constancia al cliente con deducible ${newPolicy.deducible || "pendiente"} y forma de pago ${newPolicy.formaPago?.toLowerCase()}.`,
+    );
   };
 
   const addClaim = () => {
@@ -161,6 +202,36 @@ export default function ClientesPolizasDemo() {
 
   const selectedPolicy = policies.find((policy) => policy.id === selectedPolicyId);
 
+  const formatCurrency = (value?: number) =>
+    typeof value === "number"
+      ? new Intl.NumberFormat("es-UY", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value)
+      : "";
+
+  const copiarConstancia = async () => {
+    if (!constancia) return;
+
+    const texto = [
+      `Póliza ${constancia.numero}`,
+      `Ramo: ${constancia.ramo}`,
+      `Aseguradora: ${constancia.aseguradora}`,
+      `Vigencia: ${constancia.vigenciaDesde} → ${constancia.vigenciaHasta}`,
+      constancia.prima ? `Prima: ${formatCurrency(constancia.prima)}` : null,
+      constancia.deducible ? `Deducible: ${constancia.deducible}` : null,
+      constancia.formaPago ? `Forma de pago: ${constancia.formaPago}` : null,
+      constancia.beneficiario ? `Beneficiario: ${constancia.beneficiario}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (!navigator.clipboard) {
+      setConstanciaMensaje("No se pudo copiar automáticamente. Usa la constancia visual para compartirla.");
+      return;
+    }
+
+    await navigator.clipboard.writeText(texto);
+    setConstanciaMensaje("Constancia copiada. Compártela por correo o WhatsApp.");
+  };
+
   return (
     <div className="flex-1 flex flex-col gap-6">
       <header className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
@@ -175,7 +246,7 @@ export default function ClientesPolizasDemo() {
         <div className="xl:col-span-3 bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
           <h2 className="text-lg font-semibold text-slate-800">Alta rápida de póliza</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Completa el formulario para ver cómo quedaría el registro de una póliza emitida desde la ficha del cliente.
+            Completa el formulario para generar la póliza, guardar la constancia y dejarla lista para compartir con el cliente.
           </p>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -227,17 +298,64 @@ export default function ClientesPolizasDemo() {
                 value={form.vigenciaDesde}
                 onChange={(event) => setForm((prev) => ({ ...prev, vigenciaDesde: event.target.value }))}
               />
-            </label>
+              </label>
 
-            <label className="flex flex-col text-sm text-slate-700 gap-1">
-              Vigencia hasta
-              <input
-                type="date"
-                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                value={form.vigenciaHasta}
-                onChange={(event) => setForm((prev) => ({ ...prev, vigenciaHasta: event.target.value }))}
-              />
-            </label>
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Vigencia hasta
+                <input
+                  type="date"
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={form.vigenciaHasta}
+                  onChange={(event) => setForm((prev) => ({ ...prev, vigenciaHasta: event.target.value }))}
+                />
+              </label>
+
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Prima mensual (USD)
+                <input
+                  type="number"
+                  min={0}
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={form.prima}
+                  placeholder="Ej. 420"
+                  onChange={(event) => setForm((prev) => ({ ...prev, prima: event.target.value }))}
+                />
+              </label>
+
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Deducible
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={form.deducible}
+                  placeholder="Ej. USD 500"
+                  onChange={(event) => setForm((prev) => ({ ...prev, deducible: event.target.value }))}
+                />
+              </label>
+
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Beneficiario
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={form.beneficiario}
+                  placeholder="Titular / Nómina / Bien"
+                  onChange={(event) => setForm((prev) => ({ ...prev, beneficiario: event.target.value }))}
+                />
+              </label>
+
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Forma de pago
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={form.formaPago}
+                  onChange={(event) => setForm((prev) => ({ ...prev, formaPago: event.target.value }))}
+                >
+                  {PAYMENT_METHODS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
           </div>
 
           <div className="mt-6 flex items-center gap-3">
@@ -246,12 +364,58 @@ export default function ClientesPolizasDemo() {
               onClick={addPolicy}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"
             >
-              Guardar póliza demo
+              Generar póliza y constancia
             </button>
             <span className="text-xs text-slate-500">
               ID sugerido: <strong className="font-semibold text-slate-700">{nextPolicyId}</strong>
             </span>
           </div>
+
+          {constancia && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide font-semibold text-emerald-700">Constancia generada</div>
+                  <div className="text-sm font-semibold text-slate-900">{constancia.numero} · {constancia.aseguradora}</div>
+                  <div className="text-xs text-slate-600">{constancia.vigenciaDesde} → {constancia.vigenciaHasta}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
+                  {constancia.prima !== undefined && <span className="rounded-full bg-white px-3 py-1 font-semibold text-emerald-700">Prima {formatCurrency(constancia.prima)}</span>}
+                  {constancia.deducible && <span className="rounded-full bg-white px-3 py-1">Deducible {constancia.deducible}</span>}
+                  {constancia.formaPago && <span className="rounded-full bg-white px-3 py-1">{constancia.formaPago}</span>}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700">
+                <div className="rounded-lg bg-white/80 px-3 py-2">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Beneficiario</div>
+                  <div className="font-semibold text-slate-900">{constancia.beneficiario || "Titular"}</div>
+                </div>
+                <div className="rounded-lg bg-white/80 px-3 py-2">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Estado</div>
+                  <div className="font-semibold text-slate-900">{constancia.estado ?? "Generada"}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-emerald-800 sm:max-w-xl">{constanciaMensaje}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={copiarConstancia}
+                    className="inline-flex items-center justify-center rounded-lg border border-emerald-600 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-white"
+                  >
+                    Copiar constancia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConstanciaMensaje("Constancia marcada como enviada al cliente.")}
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Marcar como enviada
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="xl:col-span-2 bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
@@ -270,6 +434,11 @@ export default function ClientesPolizasDemo() {
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {policy.vigenciaDesde} → {policy.vigenciaHasta}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                      {policy.prima !== undefined && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">Prima {formatCurrency(policy.prima)}</span>}
+                      {policy.deducible && <span className="rounded-full bg-slate-100 px-2 py-0.5">Deducible {policy.deducible}</span>}
+                      {policy.estado && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 font-semibold">{policy.estado}</span>}
                     </div>
                   </div>
                   <div className="text-xs text-slate-400">{policy.id}</div>
