@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 type Policy = {
   id: string;
+  tipo: string;
   ramo: string;
   aseguradora: string;
   numero: string;
@@ -22,6 +23,13 @@ type Claim = {
   policyId?: string;
 };
 
+type PolicyTypeOption = {
+  id: string;
+  label: string;
+  ramo: string;
+  descripcion: string;
+};
+
 const POLICY_RAMO = [
   "Automotor",
   "Hogar",
@@ -29,6 +37,45 @@ const POLICY_RAMO = [
   "Agro",
   "Accidentes Personales",
   "Garantía de alquiler",
+];
+
+const POLICY_TYPES: PolicyTypeOption[] = [
+  {
+    id: "auto-particular",
+    label: "Auto particular",
+    ramo: "Automotor",
+    descripcion: "Siniestros de tránsito, robo parcial/total y asistencia en ruta.",
+  },
+  {
+    id: "hogar-premium",
+    label: "Hogar premium",
+    ramo: "Hogar",
+    descripcion: "Incendio, robo de contenidos y responsabilidad civil en el hogar.",
+  },
+  {
+    id: "vida-colectivo",
+    label: "Vida colectivo",
+    ramo: "Vida Colectivo",
+    descripcion: "Cobertura para nóminas, renovación anual y suma asegurada pactada.",
+  },
+  {
+    id: "agro-integral",
+    label: "Agro integral",
+    ramo: "Agro",
+    descripcion: "Granizo, heladas y eventos climáticos sobre cultivos.",
+  },
+  {
+    id: "accidentes-personales",
+    label: "Accidentes personales",
+    ramo: "Accidentes Personales",
+    descripcion: "Cobertura individual o por nómina ante lesiones y gastos médicos.",
+  },
+  {
+    id: "garantia-alquiler",
+    label: "Garantía de alquiler",
+    ramo: "Garantía de alquiler",
+    descripcion: "Daños y falta de pago en contratos de arrendamiento.",
+  },
 ];
 
 const CLAIM_STATES: Claim["estado"][] = [
@@ -56,6 +103,7 @@ const INSURERS = [
 const INITIAL_POLICIES: Policy[] = [
   {
     id: "pol-100",
+    tipo: "auto-particular",
     ramo: "Automotor",
     aseguradora: "Porto",
     numero: "AU-2024-0345",
@@ -69,6 +117,7 @@ const INITIAL_POLICIES: Policy[] = [
   },
   {
     id: "pol-101",
+    tipo: "vida-colectivo",
     ramo: "Vida Colectivo",
     aseguradora: "Sura",
     numero: "VC-2023-0911",
@@ -109,6 +158,7 @@ export default function ClientesPolizasDemo() {
   const [claims, setClaims] = useState(INITIAL_CLAIMS);
 
   const [form, setForm] = useState({
+    tipo: POLICY_TYPES[0].id,
     ramo: POLICY_RAMO[0],
     aseguradora: INSURERS[0],
     numero: "",
@@ -133,6 +183,9 @@ export default function ClientesPolizasDemo() {
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("");
 
+  const findPolicyType = (id: string) => POLICY_TYPES.find((type) => type.id === id);
+  const selectedPolicyType = useMemo(() => findPolicyType(form.tipo), [form.tipo]);
+
   const nextPolicyId = useMemo(() => `pol-${100 + policies.length}`, [policies.length]);
   const nextClaimId = useMemo(() => `sin-${50 + claims.length + 1}`, [claims.length]);
 
@@ -145,6 +198,7 @@ export default function ClientesPolizasDemo() {
 
     const newPolicy: Policy = {
       id: nextPolicyId,
+      tipo: form.tipo,
       ramo: form.ramo,
       aseguradora: form.aseguradora,
       numero: generatedNumber,
@@ -158,12 +212,12 @@ export default function ClientesPolizasDemo() {
     };
 
     setPolicies((prev) => [...prev, newPolicy]);
-    setForm({ ramo: POLICY_RAMO[0], aseguradora: INSURERS[0], numero: "", vigenciaDesde: "", vigenciaHasta: "", prima: "", deducible: "", beneficiario: "Titular", formaPago: PAYMENT_METHODS[0] });
+    setForm({ tipo: POLICY_TYPES[0].id, ramo: POLICY_RAMO[0], aseguradora: INSURERS[0], numero: "", vigenciaDesde: "", vigenciaHasta: "", prima: "", deducible: "", beneficiario: "Titular", formaPago: PAYMENT_METHODS[0] });
     setSelectedPolicyId(newPolicy.id);
 
     setConstancia(newPolicy);
     setConstanciaMensaje(
-      `Póliza ${generatedNumber} generada para ${newPolicy.aseguradora}. Listo para enviar constancia al cliente con deducible ${newPolicy.deducible || "pendiente"} y forma de pago ${newPolicy.formaPago?.toLowerCase()}.`,
+      `Póliza ${generatedNumber} (${getPolicyTypeLabel(newPolicy.tipo)}) generada para ${newPolicy.aseguradora}. Listo para enviar constancia al cliente con deducible ${newPolicy.deducible || "pendiente"} y forma de pago ${newPolicy.formaPago?.toLowerCase()}.`,
     );
   };
 
@@ -202,6 +256,8 @@ export default function ClientesPolizasDemo() {
 
   const selectedPolicy = policies.find((policy) => policy.id === selectedPolicyId);
 
+  const getPolicyTypeLabel = (id?: string) => (id ? findPolicyType(id)?.label ?? id : "");
+
   const formatCurrency = (value?: number) =>
     typeof value === "number"
       ? new Intl.NumberFormat("es-UY", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value)
@@ -212,6 +268,7 @@ export default function ClientesPolizasDemo() {
 
     const texto = [
       `Póliza ${constancia.numero}`,
+      constancia.tipo ? `Tipo: ${getPolicyTypeLabel(constancia.tipo)}` : null,
       `Ramo: ${constancia.ramo}`,
       `Aseguradora: ${constancia.aseguradora}`,
       `Vigencia: ${constancia.vigenciaDesde} → ${constancia.vigenciaHasta}`,
@@ -266,6 +323,22 @@ export default function ClientesPolizasDemo() {
             </label>
 
             <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Tipo de póliza
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={form.tipo}
+                onChange={(event) => setForm((prev) => ({ ...prev, tipo: event.target.value }))}
+              >
+                {POLICY_TYPES.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label} · {option.ramo}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-500">{selectedPolicyType?.descripcion}</span>
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
               Aseguradora
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -298,64 +371,64 @@ export default function ClientesPolizasDemo() {
                 value={form.vigenciaDesde}
                 onChange={(event) => setForm((prev) => ({ ...prev, vigenciaDesde: event.target.value }))}
               />
-              </label>
+            </label>
 
-              <label className="flex flex-col text-sm text-slate-700 gap-1">
-                Vigencia hasta
-                <input
-                  type="date"
-                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={form.vigenciaHasta}
-                  onChange={(event) => setForm((prev) => ({ ...prev, vigenciaHasta: event.target.value }))}
-                />
-              </label>
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Vigencia hasta
+              <input
+                type="date"
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={form.vigenciaHasta}
+                onChange={(event) => setForm((prev) => ({ ...prev, vigenciaHasta: event.target.value }))}
+              />
+            </label>
 
-              <label className="flex flex-col text-sm text-slate-700 gap-1">
-                Prima mensual (USD)
-                <input
-                  type="number"
-                  min={0}
-                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={form.prima}
-                  placeholder="Ej. 420"
-                  onChange={(event) => setForm((prev) => ({ ...prev, prima: event.target.value }))}
-                />
-              </label>
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Prima mensual (USD)
+              <input
+                type="number"
+                min={0}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={form.prima}
+                placeholder="Ej. 420"
+                onChange={(event) => setForm((prev) => ({ ...prev, prima: event.target.value }))}
+              />
+            </label>
 
-              <label className="flex flex-col text-sm text-slate-700 gap-1">
-                Deducible
-                <input
-                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={form.deducible}
-                  placeholder="Ej. USD 500"
-                  onChange={(event) => setForm((prev) => ({ ...prev, deducible: event.target.value }))}
-                />
-              </label>
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Deducible
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={form.deducible}
+                placeholder="Ej. USD 500"
+                onChange={(event) => setForm((prev) => ({ ...prev, deducible: event.target.value }))}
+              />
+            </label>
 
-              <label className="flex flex-col text-sm text-slate-700 gap-1">
-                Beneficiario
-                <input
-                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={form.beneficiario}
-                  placeholder="Titular / Nómina / Bien"
-                  onChange={(event) => setForm((prev) => ({ ...prev, beneficiario: event.target.value }))}
-                />
-              </label>
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Beneficiario
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={form.beneficiario}
+                placeholder="Titular / Nómina / Bien"
+                onChange={(event) => setForm((prev) => ({ ...prev, beneficiario: event.target.value }))}
+              />
+            </label>
 
-              <label className="flex flex-col text-sm text-slate-700 gap-1">
-                Forma de pago
-                <select
-                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={form.formaPago}
-                  onChange={(event) => setForm((prev) => ({ ...prev, formaPago: event.target.value }))}
-                >
-                  {PAYMENT_METHODS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Forma de pago
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={form.formaPago}
+                onChange={(event) => setForm((prev) => ({ ...prev, formaPago: event.target.value }))}
+              >
+                {PAYMENT_METHODS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="mt-6 flex items-center gap-3">
@@ -380,6 +453,7 @@ export default function ClientesPolizasDemo() {
                   <div className="text-xs text-slate-600">{constancia.vigenciaDesde} → {constancia.vigenciaHasta}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
+                  {constancia.tipo && <span className="rounded-full bg-white px-3 py-1 font-semibold text-emerald-700">{getPolicyTypeLabel(constancia.tipo)}</span>}
                   {constancia.prima !== undefined && <span className="rounded-full bg-white px-3 py-1 font-semibold text-emerald-700">Prima {formatCurrency(constancia.prima)}</span>}
                   {constancia.deducible && <span className="rounded-full bg-white px-3 py-1">Deducible {constancia.deducible}</span>}
                   {constancia.formaPago && <span className="rounded-full bg-white px-3 py-1">{constancia.formaPago}</span>}
@@ -430,12 +504,13 @@ export default function ClientesPolizasDemo() {
                       {policy.numero}
                     </div>
                     <div className="text-xs text-slate-500">
-                      {policy.ramo} · {policy.aseguradora}
+                      {getPolicyTypeLabel(policy.tipo)} · {policy.ramo} · {policy.aseguradora}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {policy.vigenciaDesde} → {policy.vigenciaHasta}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                      {policy.tipo && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">{getPolicyTypeLabel(policy.tipo)}</span>}
                       {policy.prima !== undefined && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">Prima {formatCurrency(policy.prima)}</span>}
                       {policy.deducible && <span className="rounded-full bg-slate-100 px-2 py-0.5">Deducible {policy.deducible}</span>}
                       {policy.estado && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 font-semibold">{policy.estado}</span>}
@@ -510,7 +585,7 @@ export default function ClientesPolizasDemo() {
                   <option value="">Seleccionar</option>
                   {policies.map((policy) => (
                     <option key={policy.id} value={policy.id}>
-                      {policy.numero} · {policy.ramo}
+                      {policy.numero} · {getPolicyTypeLabel(policy.tipo) || policy.ramo}
                     </option>
                   ))}
                 </select>
@@ -550,7 +625,7 @@ export default function ClientesPolizasDemo() {
                     <div className="mt-1 text-sm font-semibold text-slate-900">{claim.descripcion}</div>
                     <div className="mt-0.5 text-xs text-slate-600">Estado: {claim.estado}</div>
                     <div className="mt-0.5 text-xs text-slate-600">
-                      Póliza asociada: {policy ? `${policy.numero} (${policy.ramo})` : "sin vínculo"}
+                      Póliza asociada: {policy ? `${policy.numero} (${getPolicyTypeLabel(policy.tipo) || policy.ramo})` : "sin vínculo"}
                     </div>
                   </button>
                 </li>
@@ -591,7 +666,7 @@ export default function ClientesPolizasDemo() {
                 <option value="">Seleccionar</option>
                 {policies.map((policy) => (
                   <option key={policy.id} value={policy.id}>
-                    {policy.numero} · {policy.ramo}
+                    {policy.numero} · {getPolicyTypeLabel(policy.tipo) || policy.ramo}
                   </option>
                 ))}
               </select>
@@ -612,7 +687,7 @@ export default function ClientesPolizasDemo() {
               <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
                 <div className="font-semibold">Resultado simulado</div>
                 <p>
-                  El siniestro <strong>{selectedClaim.id}</strong> queda vinculado a la póliza <strong>{selectedPolicy.numero}</strong>.
+                  El siniestro <strong>{selectedClaim.id}</strong> queda vinculado a la póliza <strong>{selectedPolicy.numero}</strong> ({getPolicyTypeLabel(selectedPolicy.tipo)}).
                   El equipo verá la trazabilidad completa en la ficha integral del cliente.
                 </p>
               </div>
