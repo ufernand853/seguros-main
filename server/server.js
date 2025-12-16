@@ -388,7 +388,8 @@ app.get("/insurers", authenticate, async (_req, res) => {
 });
 
 app.post("/insurers", authenticate, async (req, res) => {
-  const { name, country, lines, status, rating, contact, key_deals, last_review, notes } = req.body || {};
+  const { name, country, lines, status, rating, annual_premium, active_policies, loss_ratio, contact, key_deals, last_review, notes } =
+    req.body || {};
   if (!name) return res.status(400).json({ error: "Nombre requerido" });
 
   const insurerDoc = {
@@ -398,9 +399,9 @@ app.post("/insurers", authenticate, async (req, res) => {
     lines: Array.isArray(lines) ? lines : [],
     status: status ?? "Activa",
     rating: typeof rating === "number" ? rating : null,
-    annual_premium: null,
-    active_policies: null,
-    loss_ratio: null,
+    annual_premium: typeof annual_premium === "number" ? annual_premium : null,
+    active_policies: typeof active_policies === "number" ? active_policies : null,
+    loss_ratio: typeof loss_ratio === "number" ? loss_ratio : null,
     contact: contact
       ? {
           name: contact.name ?? null,

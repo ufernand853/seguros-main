@@ -136,4 +136,55 @@ export async function apiListRenewals(accessToken: string): Promise<{ items: Ren
   });
 }
 
+export type InsurerListItem = {
+  id: string;
+  name: string;
+  country?: string | null;
+  lines?: string[];
+  status?: string | null;
+  rating?: number | null;
+  annual_premium?: number | null;
+  active_policies?: number | null;
+  loss_ratio?: number | null;
+  contact?: { name?: string | null; email?: string | null; phone?: string | null } | null;
+  key_deals?: string[];
+  last_review?: string | null;
+  notes?: string | null;
+  created_at?: string;
+};
+
+export type CreateInsurerPayload = {
+  name: string;
+  country?: string | null;
+  lines?: string[];
+  status?: string | null;
+  rating?: number | null;
+  annual_premium?: number | null;
+  active_policies?: number | null;
+  loss_ratio?: number | null;
+  contact?: { name?: string | null; email?: string | null; phone?: string | null } | null;
+  key_deals?: string[];
+  last_review?: string | null;
+  notes?: string | null;
+};
+
+export async function apiListInsurers(accessToken: string): Promise<{ items: InsurerListItem[] }> {
+  return request("/insurers", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiCreateInsurer(payload: CreateInsurerPayload, accessToken: string): Promise<InsurerListItem> {
+  return request("/insurers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export const apiConfig = { API_BASE };
