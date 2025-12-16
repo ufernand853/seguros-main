@@ -152,10 +152,193 @@ app.get("/clients", authenticate, async (_req, res) => {
       .find({}, { projection: { password_hash: 0 } })
       .sort({ created_at: -1 })
       .toArray();
-    res.json({ items: items.map(mapDocument) });
+
+    const insurerIds = Array.from(
+      new Set(
+        items
+          .flatMap((client) => (client.policies ?? []).map((policy) => policy.insurer_id))
+          .filter((id) => typeof id === "string"),
+      ),
+    );
+
+    const insurersLookup = insurerIds.length
+      ? await db
+          .collection("insurers")
+          .find({ _id: { $in: insurerIds } })
+          .toArray()
+      : [];
+
+    const insurersById = insurersLookup.reduce((acc, row) => {
+      acc[row._id] = row;
+      return acc;
+    }, {});
+
+    const clients = items.map((client) => ({
+      ...mapDocument(client),
+      policies: (client.policies ?? []).map((policy) => ({
+        ...policy,
+        insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+      })),
+    }));
+
+    res.json({ items: clients });
   } catch (err) {
     console.error("[clients]", err);
     res.status(500).json({ error: "No se pudieron recuperar los clientes" });
+  }
+});
+
+async function aggregateClaims(filter = {}) {
+  const db = getDb();
+  const pipeline = [
+    { $match: filter },
+    {
+      $lookup: {
+        from: "clients",
+        localField: "client_id",
+        foreignField: "_id",
+        as: "client",
+      },
+    },
+    { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
+    {
+      $set: {
+        policy: {
+          $first: {
+            $filter: {
+              input: "$client.policies",
+              as: "policy",
+              cond: { $eq: ["$$policy.id", "$policy_id"] },
+            },
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "insurers",
+        localField: "policy.insurer_id",
+        foreignField: "_id",
+        as: "insurer",
+      },
+    },
+    { $unwind: { path: "$insurer", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        client_id: 1,
+        policy_id: 1,
+        policy_type: "$policy.type",
+        insurer_name: "$insurer.name",
+        type: 1,
+        event_date: 1,
+        event_time: 1,
+        location: 1,
+        description: 1,
+        priority: 1,
+        channel: 1,
+        status: 1,
+        third_party_damage: 1,
+        tow_needed: 1,
+        internal_owner: 1,
+        notify_client: 1,
+        notify_broker: 1,
+        notes: 1,
+        contact_email: 1,
+        contact_phone: 1,
+        created_at: 1,
+        updated_at: 1,
+        client_name: "$client.name",
+        client_document: "$client.document",
+      },
+    },
+    { $sort: { created_at: -1 } },
+  ];
+
+  const rows = await db.collection("claims").aggregate(pipeline).toArray();
+  return rows.map(mapDocument);
+}
+
+app.get("/claims", authenticate, async (_req, res) => {
+  try {
+    const items = await aggregateClaims();
+    res.json({ items });
+  } catch (err) {
+    console.error("[claims]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los siniestros" });
+  }
+});
+
+app.post("/claims", authenticate, async (req, res) => {
+  const {
+    client_id,
+    policy_id,
+    type,
+    event_date,
+    event_time,
+    location,
+    description,
+    priority,
+    channel,
+    internal_owner,
+    third_party_damage,
+    tow_needed,
+    notify_client,
+    notify_broker,
+    notes,
+    contact_email,
+    contact_phone,
+  } = req.body || {};
+
+  if (!client_id || !policy_id || !type || !event_date || !location || !description) {
+    return res.status(400).json({ error: "Cliente, póliza, tipo, fecha, ubicación y descripción son obligatorios" });
+  }
+
+  const eventDateObj = new Date(event_date);
+  if (Number.isNaN(eventDateObj.getTime())) {
+    return res.status(400).json({ error: "La fecha del siniestro no es válida" });
+  }
+
+  try {
+    const db = getDb();
+    const client = await db.collection("clients").findOne({ _id: client_id });
+    if (!client) return res.status(404).json({ error: "Cliente no encontrado" });
+
+    const policy = (client.policies ?? []).find((p) => p.id === policy_id);
+    if (!policy) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
+
+    const claimDoc = {
+      _id: randomUUID(),
+      client_id,
+      policy_id,
+      policy_type: policy.type ?? null,
+      insurer_id: policy.insurer_id ?? null,
+      type,
+      event_date: eventDateObj,
+      event_time: event_time ?? null,
+      location,
+      description,
+      priority: priority ?? null,
+      channel: channel ?? null,
+      status: "Denuncia ingresada",
+      third_party_damage: !!third_party_damage,
+      tow_needed: !!tow_needed,
+      internal_owner: internal_owner ?? null,
+      notify_client: !!notify_client,
+      notify_broker: !!notify_broker,
+      notes: notes ?? null,
+      contact_email: contact_email ?? null,
+      contact_phone: contact_phone ?? null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    await db.collection("claims").insertOne(claimDoc);
+    const [item] = await aggregateClaims({ _id: claimDoc._id });
+    res.status(201).json({ item: item ?? mapDocument(claimDoc) });
+  } catch (err) {
+    console.error("[claims create]", err);
+    res.status(500).json({ error: "No se pudo registrar el siniestro" });
   }
 });
 

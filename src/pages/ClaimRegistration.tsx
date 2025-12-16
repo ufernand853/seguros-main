@@ -1,77 +1,45 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../auth/AuthProvider";
+import {
+  apiCreateClaim,
+  apiListClaims,
+  apiListClients,
+  type CreateClaimPayload,
+  type ClaimItem,
+  type ClientListItem,
+  type PolicySummary,
+} from "../services/api";
 
 type ClaimRecord = {
   id: string;
-  poliza: string;
+  poliza?: string | null;
+  policyType?: string | null;
+  insurerName?: string | null;
   tipo: string;
   fecha: string;
   estado: string;
   resumen: string;
-  prioridad: string;
-  canal: string;
-  asegurado: string;
+  prioridad?: string | null;
+  canal?: string | null;
+  asegurado?: string | null;
+  ubicacion?: string | null;
 };
 
-const POLICY_OPTIONS = [
-  {
-    id: "AUTO-2342",
-    titular: "Alicia Demo",
-    producto: "Seguro Auto",
-    aseguradora: "Porto",
-    vigencia: "15/01/2024 - 15/01/2025",
-  },
-  {
-    id: "HOG-4881",
-    titular: "Alicia Demo",
-    producto: "Hogar Premium",
-    aseguradora: "Sura",
-    vigencia: "01/04/2024 - 31/03/2025",
-  },
-  {
-    id: "GAR-9910",
-    titular: "Alicia Demo",
-    producto: "Garantía de Alquiler",
-    aseguradora: "Sura",
-    vigencia: "15/01/2024 - 15/01/2025",
-  },
-];
-
-const INITIAL_CLAIMS: ClaimRecord[] = [
-  {
-    id: "SIN-1023",
-    poliza: "AUTO-2342",
-    tipo: "Automotor",
-    fecha: "2024-03-10",
-    estado: "Inspección agendada",
-    resumen: "Choque leve con tercero, pendiente envío de fotos.",
-    prioridad: "Alta",
-    canal: "WhatsApp",
-    asegurado: "Alicia Demo",
-  },
-  {
-    id: "SIN-1018",
-    poliza: "GAR-9910",
-    tipo: "Garantía de alquiler",
-    fecha: "2024-02-02",
-    estado: "Enviada carta de cobertura",
-    resumen: "Ingreso por daños en propiedad alquilada. Evaluando franquicia.",
-    prioridad: "Media",
-    canal: "Email",
-    asegurado: "Alicia Demo",
-  },
-];
+type ClientWithPolicies = ClientListItem & { policies?: PolicySummary[] };
 
 const EVENT_TYPES = ["Automotor", "Hogar", "Accidentes personales", "Responsabilidad civil", "Garantía de alquiler"];
 const PRIORITIES = ["Alta", "Media", "Baja"];
 const NOTIFICATION_CHANNELS = ["WhatsApp", "Email", "Teléfono"];
 
 export default function ClaimRegistration() {
+  const { token } = useAuth();
   const [claimForm, setClaimForm] = useState({
-    asegurado: "Alicia Demo",
-    documento: "CI 4.999.999-9",
-    contacto: "carla.demo@example.com",
-    telefono: "+598 94 000 000",
-    poliza: POLICY_OPTIONS[0].id,
+    clienteId: "",
+    asegurado: "",
+    documento: "",
+    contacto: "",
+    telefono: "",
+    poliza: "",
     tipo: EVENT_TYPES[0],
     fecha: "",
     hora: "",
@@ -87,6 +55,8 @@ export default function ClaimRegistration() {
     notificarProductor: true,
   });
 
+  const [clients, setClients] = useState<ClientWithPolicies[]>([]);
+  const [claims, setClaims] = useState<ClaimRecord[]>([]);
   const [documentChecklist, setDocumentChecklist] = useState({
     fotos: true,
     denunciaPolicial: true,
@@ -95,14 +65,24 @@ export default function ClaimRegistration() {
     presupuesto: false,
   });
 
-  const [claims, setClaims] = useState<ClaimRecord[]>(INITIAL_CLAIMS);
+  const [isLoadingData, setLoadingData] = useState(false);
+  const [isSubmitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedPolicy = useMemo(
-    () => POLICY_OPTIONS.find((policy) => policy.id === claimForm.poliza),
-    [claimForm.poliza],
-  );
+  const selectedClient = useMemo(() => clients.find((client) => client.id === claimForm.clienteId), [clients, claimForm.clienteId]);
+  const policyOptions = selectedClient?.policies ?? [];
+  const selectedPolicy = useMemo(() => policyOptions.find((policy) => policy.id === claimForm.poliza), [policyOptions, claimForm.poliza]);
+  const formatPolicyLabel = (policy?: PolicySummary) =>
+    [policy?.type ?? "Póliza", policy?.insurer ? `· ${policy.insurer}` : null, policy?.id ? `(${policy.id})` : null]
+      .filter(Boolean)
+      .join(" ");
+  const formatDate = (value?: string | null) => {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "—";
+    return parsed.toLocaleDateString("es-UY");
+  };
 
   const checklistCount = useMemo(() => {
     const total = Object.keys(documentChecklist).length;
@@ -110,45 +90,133 @@ export default function ClaimRegistration() {
     return { total, ready };
   }, [documentChecklist]);
 
+  const mapClaimFromApi = (item: ClaimItem): ClaimRecord => ({
+    id: item.id,
+    poliza: item.policy_id ?? null,
+    policyType: item.policy_type ?? null,
+    insurerName: item.insurer_name ?? null,
+    tipo: item.type ?? "Siniestro",
+    fecha: item.event_date ? item.event_date.slice(0, 10) : "",
+    estado: item.status ?? "Denuncia ingresada",
+    resumen: item.description ?? "",
+    prioridad: item.priority ?? null,
+    canal: item.channel ?? null,
+    asegurado: item.client_name ?? null,
+    ubicacion: item.location ?? null,
+  });
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingData(true);
+    setError(null);
+
+    Promise.all([apiListClients(token), apiListClaims(token)])
+      .then(([clientsResponse, claimsResponse]) => {
+        const clientsFromApi: ClientWithPolicies[] = (clientsResponse.items ?? []).map((item: ClientListItem) => ({
+          ...item,
+          policies: item.policies ?? [],
+        }));
+
+        setClients(clientsFromApi);
+
+        if (clientsFromApi.length > 0) {
+          const defaultClient = clientsFromApi[0];
+          setClaimForm((current) => ({
+            ...current,
+            clienteId: defaultClient.id,
+            asegurado: defaultClient.name,
+            documento: defaultClient.document ?? "",
+            contacto: defaultClient.contacts?.[0]?.email ?? "",
+            telefono: defaultClient.contacts?.[0]?.phone ?? "",
+            poliza: defaultClient.policies?.[0]?.id ?? "",
+          }));
+        }
+
+        const mappedClaims = (claimsResponse.items ?? []).map((item: ClaimItem) => mapClaimFromApi(item));
+        setClaims(mappedClaims);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los datos de siniestros"))
+      .finally(() => setLoadingData(false));
+  }, [token]);
+
   const toggleChecklist = (field: keyof typeof documentChecklist) => {
     setDocumentChecklist((current) => ({ ...current, [field]: !current[field] }));
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleClientChange = (clientId: string) => {
+    const client = clients.find((c) => c.id === clientId);
+    setClaimForm((current) => ({
+      ...current,
+      clienteId: clientId,
+      asegurado: client?.name ?? "",
+      documento: client?.document ?? "",
+      contacto: client?.contacts?.[0]?.email ?? "",
+      telefono: client?.contacts?.[0]?.phone ?? "",
+      poliza: client?.policies?.[0]?.id ?? "",
+    }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setSuccess(null);
 
-    if (!claimForm.poliza || !claimForm.fecha || !claimForm.descripcion || !claimForm.ubicacion) {
-      setError("Completa póliza, fecha, ubicación y descripción del evento para registrar el siniestro.");
+    if (!token) {
+      setError("Debes iniciar sesión para registrar el siniestro.");
       return;
     }
 
-    const newClaim: ClaimRecord = {
-      id: `SIN-${(claims.length + 1024).toString().padStart(4, "0")}`,
-      poliza: claimForm.poliza,
-      tipo: claimForm.tipo,
-      fecha: claimForm.fecha,
-      estado: "Denuncia ingresada",
-      resumen: claimForm.descripcion || "Denuncia registrada",
-      prioridad: claimForm.prioridad,
-      canal: claimForm.canal,
-      asegurado: claimForm.asegurado,
-    };
+    if (!claimForm.clienteId || !claimForm.poliza || !claimForm.fecha || !claimForm.descripcion || !claimForm.ubicacion) {
+      setError("Completa cliente, póliza, fecha, ubicación y descripción del evento para registrar el siniestro.");
+      return;
+    }
 
-    setClaims((current) => [newClaim, ...current]);
-    setSuccess(
-      `Denuncia registrada para la póliza ${claimForm.poliza}. Se notifica al asegurado por ${claimForm.canal} y queda en seguimiento interno.`,
-    );
+    setSubmitting(true);
 
-    setClaimForm((current) => ({
-      ...current,
-      fecha: "",
-      hora: "",
-      ubicacion: "",
-      descripcion: "",
-      observaciones: "",
-    }));
+    try {
+      const payload: CreateClaimPayload = {
+        client_id: claimForm.clienteId,
+        policy_id: claimForm.poliza,
+        type: claimForm.tipo,
+        event_date: claimForm.fecha,
+        event_time: claimForm.hora || null,
+        location: claimForm.ubicacion,
+        description: claimForm.descripcion,
+        priority: claimForm.prioridad,
+        channel: claimForm.canal,
+        internal_owner: claimForm.responsableInterno,
+        third_party_damage: claimForm.danosTerceros,
+        tow_needed: claimForm.requiereGrua,
+        notify_client: claimForm.notificarCliente,
+        notify_broker: claimForm.notificarProductor,
+        notes: claimForm.observaciones,
+        contact_email: claimForm.contacto || null,
+        contact_phone: claimForm.telefono || null,
+      };
+
+      const response = await apiCreateClaim(payload, token);
+      const newClaim = mapClaimFromApi(response.item);
+
+      setClaims((current) => [newClaim, ...current.filter((claim) => claim.id !== newClaim.id)]);
+
+      const policyLabel = selectedPolicy?.type ?? selectedPolicy?.id ?? claimForm.poliza;
+      setSuccess(
+        `Denuncia registrada en base para la póliza ${policyLabel}. Se notifica al asegurado por ${claimForm.canal} y queda en seguimiento interno.`,
+      );
+
+      setClaimForm((current) => ({
+        ...current,
+        fecha: "",
+        hora: "",
+        ubicacion: "",
+        descripcion: "",
+        observaciones: "",
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo registrar el siniestro en la base de datos");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -172,8 +240,41 @@ export default function ClaimRegistration() {
                 <p className="text-sm text-slate-600">Confirmamos identidad y contacto antes de registrar.</p>
               </div>
               <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                Pólizas vinculadas: {POLICY_OPTIONS.length}
+                Pólizas vinculadas: {policyOptions.length}
               </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="cliente">
+                  Cliente
+                </label>
+                <select
+                  id="cliente"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={claimForm.clienteId}
+                  onChange={(event) => handleClientChange(event.target.value)}
+                  disabled={isLoadingData || clients.length === 0}
+                >
+                  <option value="">Selecciona un cliente</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="documento">
+                  Documento
+                </label>
+                <input
+                  id="documento"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={claimForm.documento}
+                  onChange={(event) => setClaimForm((current) => ({ ...current, documento: event.target.value }))}
+                  placeholder="RUT o documento"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -188,19 +289,6 @@ export default function ClaimRegistration() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="documento">
-                  Documento
-                </label>
-                <input
-                  id="documento"
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                  value={claimForm.documento}
-                  onChange={(event) => setClaimForm((current) => ({ ...current, documento: event.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="contacto">
                   Email de contacto
                 </label>
@@ -210,8 +298,11 @@ export default function ClaimRegistration() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
                   value={claimForm.contacto}
                   onChange={(event) => setClaimForm((current) => ({ ...current, contacto: event.target.value }))}
+                  placeholder="correo@cliente.com"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="telefono">
                   Teléfono
@@ -221,6 +312,7 @@ export default function ClaimRegistration() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
                   value={claimForm.telefono}
                   onChange={(event) => setClaimForm((current) => ({ ...current, telefono: event.target.value }))}
+                  placeholder="+598 …"
                 />
               </div>
               <div>
@@ -263,10 +355,12 @@ export default function ClaimRegistration() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
                   value={claimForm.poliza}
                   onChange={(event) => setClaimForm((current) => ({ ...current, poliza: event.target.value }))}
+                  disabled={policyOptions.length === 0}
                 >
-                  {POLICY_OPTIONS.map((policy) => (
+                  {policyOptions.length === 0 && <option value="">No hay pólizas para el cliente seleccionado</option>}
+                  {policyOptions.map((policy) => (
                     <option key={policy.id} value={policy.id}>
-                      {policy.producto} · {policy.aseguradora} ({policy.id})
+                      {formatPolicyLabel(policy)}
                     </option>
                   ))}
                 </select>
@@ -455,9 +549,10 @@ export default function ClaimRegistration() {
               </div>
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
+                disabled={isSubmitting || isLoadingData || clients.length === 0}
+                className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-60"
               >
-                Registrar siniestro
+                {isSubmitting ? "Registrando…" : "Registrar siniestro"}
               </button>
             </div>
 
@@ -548,18 +643,24 @@ export default function ClaimRegistration() {
             <p className="text-sm text-slate-600">Validamos póliza, vigencia y contactos antes de enviar.</p>
             <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-2 text-sm text-slate-700">
               <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-900">Cliente</span>
+                <span>{selectedClient?.name ?? "Selecciona un cliente"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-900">Documento</span>
+                <span>{selectedClient?.document ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-900">Póliza</span>
-                <span>
-                  {selectedPolicy?.producto} ({selectedPolicy?.id})
-                </span>
+                <span>{selectedPolicy ? formatPolicyLabel(selectedPolicy) : "Sin póliza seleccionada"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-900">Aseguradora</span>
-                <span>{selectedPolicy?.aseguradora}</span>
+                <span>{selectedPolicy?.insurer ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-900">Vigencia</span>
-                <span>{selectedPolicy?.vigencia}</span>
+                <span>{selectedPolicy?.next_renewal ? `Próxima renovación ${formatDate(selectedPolicy.next_renewal)}` : "Sin dato"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-900">Prioridad</span>
@@ -598,28 +699,37 @@ export default function ClaimRegistration() {
                 {claims.length} registros
               </span>
             </div>
-            <ul className="space-y-3">
-              {claims.map((claim) => (
-                <li key={claim.id} className="rounded-xl border border-slate-100 px-4 py-3 bg-slate-50">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">
-                        {claim.id} · {claim.tipo}
+            {isLoadingData ? (
+              <div className="text-sm text-slate-500">Cargando siniestros desde la base…</div>
+            ) : claims.length === 0 ? (
+              <div className="text-sm text-slate-500">Aún no hay siniestros registrados en la base de datos.</div>
+            ) : (
+              <ul className="space-y-3">
+                {claims.map((claim) => (
+                  <li key={claim.id} className="rounded-xl border border-slate-100 px-4 py-3 bg-slate-50">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {claim.id} · {claim.tipo}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {claim.fecha} · Póliza {claim.policyType ?? claim.poliza}
+                          {claim.insurerName ? ` · ${claim.insurerName}` : ""}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-500">{claim.fecha} · Póliza {claim.poliza}</div>
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-xs font-semibold">
+                        {claim.estado}
+                      </div>
                     </div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-xs font-semibold">
-                      {claim.estado}
+                    <p className="mt-2 text-sm text-slate-700">{claim.resumen}</p>
+                    <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
+                      <span>Canal: {claim.canal ?? "—"}</span>
+                      <span>Prioridad: {claim.prioridad ?? "—"}</span>
                     </div>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-700">{claim.resumen}</p>
-                  <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
-                    <span>Canal: {claim.canal}</span>
-                    <span>Prioridad: {claim.prioridad}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </section>
