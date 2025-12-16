@@ -71,6 +71,19 @@ export type ClientListItem = {
   name: string;
   document?: string;
   city?: string | null;
+  contacts?: ContactInfo[];
+  policies?: PolicySummary[];
+};
+
+export type ContactInfo = { id?: string; name?: string; email?: string | null; phone?: string | null };
+export type PolicySummary = {
+  id: string;
+  type?: string | null;
+  insurer_id?: string | null;
+  insurer?: string | null;
+  status?: string | null;
+  premium?: number | null;
+  next_renewal?: string | null;
 };
 
 export async function apiListClients(accessToken: string): Promise<{ items: ClientListItem[] }> {
@@ -116,6 +129,32 @@ export async function apiListTasks(accessToken: string): Promise<{ items: TaskIt
       Authorization: `Bearer ${accessToken}`,
     },
   });
+}
+
+export type EmployeeItem = {
+  id: string;
+  name: string;
+  role?: string | null;
+  email?: string | null;
+};
+
+export async function apiListEmployees(accessToken: string): Promise<{ items: EmployeeItem[] }> {
+  try {
+    return await request("/employees", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  } catch (error) {
+    // Fallback demo data while the backend expone el endpoint real
+    return {
+      items: [
+        { id: "ops-1", name: "Equipo Siniestros", role: "operaciones", email: "siniestros@segurosdemo.com" },
+        { id: "ops-2", name: "Backoffice", role: "operaciones", email: "backoffice@segurosdemo.com" },
+        { id: "ops-3", name: "Productor", role: "comercial", email: "productor@segurosdemo.com" },
+      ],
+    };
+  }
 }
 
 export type RenewalItem = {
@@ -178,6 +217,71 @@ export async function apiListInsurers(accessToken: string): Promise<{ items: Ins
 
 export async function apiCreateInsurer(payload: CreateInsurerPayload, accessToken: string): Promise<InsurerListItem> {
   return request("/insurers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export type ClaimItem = {
+  id: string;
+  client_id: string;
+  client_name?: string | null;
+  client_document?: string | null;
+  policy_id?: string | null;
+  policy_type?: string | null;
+  insurer_name?: string | null;
+  type?: string | null;
+  event_date?: string | null;
+  event_time?: string | null;
+  location?: string | null;
+  description?: string | null;
+  priority?: string | null;
+  channel?: string | null;
+  status?: string | null;
+  third_party_damage?: boolean;
+  tow_needed?: boolean;
+  internal_owner?: string | null;
+  notify_client?: boolean;
+  notify_broker?: boolean;
+  notes?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  created_at?: string | null;
+};
+
+export type CreateClaimPayload = {
+  client_id: string;
+  policy_id: string;
+  type: string;
+  event_date: string;
+  event_time?: string | null;
+  location: string;
+  description: string;
+  priority?: string | null;
+  channel?: string | null;
+  internal_owner?: string | null;
+  third_party_damage?: boolean;
+  tow_needed?: boolean;
+  notify_client?: boolean;
+  notify_broker?: boolean;
+  notes?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+};
+
+export const apiListClaims = async (accessToken: string): Promise<{ items: ClaimItem[] }> =>
+  request("/claims", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+export async function apiCreateClaim(payload: CreateClaimPayload, accessToken: string): Promise<{ item: ClaimItem }> {
+  return request("/claims", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
