@@ -102,11 +102,13 @@ export async function apiListPipeline(accessToken: string): Promise<{ items: Pip
 
 export type TaskItem = {
   id: string;
+  client_id?: string | null;
   title: string;
   due_date?: string;
   status?: string;
   priority?: string | null;
-  owner?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
   client_name?: string | null;
 };
 
@@ -115,6 +117,41 @@ export async function apiListTasks(accessToken: string): Promise<{ items: TaskIt
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+  });
+}
+
+export type CreateTaskPayload = {
+  title: string;
+  client_id?: string | null;
+  due_date?: string | null;
+  status?: string;
+  priority?: string | null;
+  owner_id?: string | null;
+};
+
+export async function apiCreateTask(payload: CreateTaskPayload, accessToken: string): Promise<TaskItem> {
+  return request("/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdateTask(
+  taskId: string,
+  payload: Partial<CreateTaskPayload>,
+  accessToken: string,
+): Promise<TaskItem> {
+  return request(`/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -184,6 +221,22 @@ export async function apiCreateInsurer(payload: CreateInsurerPayload, accessToke
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export type Employee = {
+  id: string;
+  name: string;
+  email?: string | null;
+  role?: string | null;
+  team?: string | null;
+};
+
+export async function apiListEmployees(accessToken: string): Promise<{ items: Employee[] }> {
+  return request("/employees", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 

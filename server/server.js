@@ -35,6 +35,65 @@ function mapDocument(doc) {
   return { id: String(_id), ...rest };
 }
 
+const TASK_STATUSES = new Set(["pendiente", "en_curso", "completada"]);
+
+function normalizeTaskStatus(status, fallback = "pendiente") {
+  if (typeof status !== "string") return fallback;
+  const normalized = status.toLowerCase();
+  return TASK_STATUSES.has(normalized) ? normalized : fallback;
+}
+
+async function getEmployeeById(id) {
+  if (!id) return null;
+  const db = getDb();
+  return db.collection("employees").findOne({ _id: String(id) });
+}
+
+async function getTaskWithRelations(taskId) {
+  const db = getDb();
+  const [row] = await db
+    .collection("tasks")
+    .aggregate([
+      { $match: { _id: String(taskId) } },
+      {
+        $lookup: {
+          from: "clients",
+          localField: "client_id",
+          foreignField: "_id",
+          as: "client",
+        },
+      },
+      { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "employees",
+          localField: "owner_id",
+          foreignField: "_id",
+          as: "owner",
+        },
+      },
+      { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          client_id: 1,
+          title: 1,
+          due_date: 1,
+          status: 1,
+          priority: 1,
+          owner_id: 1,
+          client_name: "$client.name",
+          owner_name: "$owner.name",
+          created_at: 1,
+          updated_at: 1,
+        },
+      },
+    ])
+    .toArray();
+
+  return row ? mapDocument(row) : null;
+}
+
 async function createRefreshToken(userId) {
   const db = getDb();
   const token = randomUUID();
@@ -223,8 +282,31 @@ app.get("/clients/:id/summary", authenticate, async (req, res) => {
 
     const tasks = await db
       .collection("tasks")
-      .find({ client_id: clientId })
-      .sort({ due_date: 1 })
+      .aggregate([
+        { $match: { client_id: clientId } },
+        {
+          $lookup: {
+            from: "employees",
+            localField: "owner_id",
+            foreignField: "_id",
+            as: "owner",
+          },
+        },
+        { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+        { $sort: { due_date: 1 } },
+        {
+          $project: {
+            _id: 1,
+            client_id: 1,
+            title: 1,
+            due_date: 1,
+            status: 1,
+            priority: 1,
+            owner_id: 1,
+            owner_name: "$owner.name",
+          },
+        },
+      ])
       .toArray();
     const opportunities = await db
       .collection("pipeline")
@@ -300,6 +382,44 @@ app.get("/pipeline", authenticate, async (_req, res) => {
   }
 });
 
+app.get("/employees", authenticate, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db
+      .collection("employees")
+      .find({}, { projection: { _id: 1, name: 1, email: 1, role: 1, team: 1 } })
+      .sort({ name: 1 })
+      .toArray();
+    res.json({ items: rows.map(mapDocument) });
+  } catch (err) {
+    console.error("[employees]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los responsables" });
+  }
+});
+
+app.post("/employees", authenticate, async (req, res) => {
+  const { name, email, role, team } = req.body || {};
+  if (!name) return res.status(400).json({ error: "Nombre requerido" });
+
+  const doc = {
+    _id: randomUUID(),
+    name,
+    email: email ?? null,
+    role: role ?? null,
+    team: team ?? null,
+    created_at: new Date(),
+  };
+
+  try {
+    const db = getDb();
+    await db.collection("employees").insertOne(doc);
+    res.status(201).json(mapDocument(doc));
+  } catch (err) {
+    console.error("[employees create]", err);
+    res.status(500).json({ error: "No se pudo crear el responsable" });
+  }
+});
+
 app.get("/tasks", authenticate, async (_req, res) => {
   try {
     const db = getDb();
@@ -316,6 +436,15 @@ app.get("/tasks", authenticate, async (_req, res) => {
         },
         { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
         {
+          $lookup: {
+            from: "employees",
+            localField: "owner_id",
+            foreignField: "_id",
+            as: "owner",
+          },
+        },
+        { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+        {
           $project: {
             _id: 1,
             client_id: 1,
@@ -323,11 +452,14 @@ app.get("/tasks", authenticate, async (_req, res) => {
             due_date: 1,
             status: 1,
             priority: 1,
-            owner: 1,
+            owner_id: 1,
             client_name: "$client.name",
+            owner_name: "$owner.name",
+            created_at: 1,
+            updated_at: 1,
           },
         },
-        { $sort: { due_date: 1 } },
+        { $sort: { due_date: 1, created_at: -1 } },
       ])
       .toArray();
 
@@ -335,6 +467,101 @@ app.get("/tasks", authenticate, async (_req, res) => {
   } catch (err) {
     console.error("[tasks]", err);
     res.status(500).json({ error: "No se pudieron recuperar las tareas" });
+  }
+});
+
+app.post("/tasks", authenticate, async (req, res) => {
+  const { title, client_id, due_date, status, priority, owner_id } = req.body || {};
+  if (!title) return res.status(400).json({ error: "Título requerido" });
+
+  const db = getDb();
+
+  try {
+    let clientExists = null;
+    if (client_id) {
+      clientExists = await db.collection("clients").findOne({ _id: client_id });
+      if (!clientExists) return res.status(400).json({ error: "Cliente no encontrado" });
+    }
+
+    let employee = null;
+    if (owner_id) {
+      employee = await getEmployeeById(owner_id);
+      if (!employee) return res.status(400).json({ error: "Responsable no encontrado" });
+    }
+
+    const doc = {
+      _id: randomUUID(),
+      client_id: clientExists?._id ?? null,
+      title,
+      due_date: due_date ? new Date(due_date) : null,
+      status: normalizeTaskStatus(status),
+      priority: typeof priority === "string" ? priority : null,
+      owner_id: employee?._id ?? null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    await db.collection("tasks").insertOne(doc);
+    const result = await getTaskWithRelations(doc._id);
+    res.status(201).json(result ?? mapDocument(doc));
+  } catch (err) {
+    console.error("[tasks create]", err);
+    res.status(500).json({ error: "No se pudo crear la tarea" });
+  }
+});
+
+app.patch("/tasks/:id", authenticate, async (req, res) => {
+  const taskId = req.params.id;
+  const { title, client_id, due_date, status, priority, owner_id } = req.body || {};
+
+  const db = getDb();
+
+  try {
+    const updates = {};
+    if (title !== undefined) {
+      if (!title) return res.status(400).json({ error: "Título requerido" });
+      updates.title = title;
+    }
+    if (client_id !== undefined) {
+      if (client_id === null) {
+        updates.client_id = null;
+      } else {
+        const clientExists = await db.collection("clients").findOne({ _id: client_id });
+        if (!clientExists) return res.status(400).json({ error: "Cliente no encontrado" });
+        updates.client_id = clientExists._id;
+      }
+    }
+    if (due_date !== undefined) {
+      updates.due_date = due_date ? new Date(due_date) : null;
+    }
+    if (status !== undefined) {
+      updates.status = normalizeTaskStatus(status);
+    }
+    if (priority !== undefined) {
+      updates.priority = typeof priority === "string" ? priority : null;
+    }
+    if (owner_id !== undefined) {
+      if (owner_id === null) {
+        updates.owner_id = null;
+      } else {
+        const employee = await getEmployeeById(owner_id);
+        if (!employee) return res.status(400).json({ error: "Responsable no encontrado" });
+        updates.owner_id = employee._id;
+      }
+    }
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Sin cambios" });
+
+    const result = await db
+      .collection("tasks")
+      .findOneAndUpdate({ _id: taskId }, { $set: { ...updates, updated_at: new Date() } }, { returnDocument: "after" });
+
+    if (!result) return res.status(404).json({ error: "Tarea no encontrada" });
+    const taskWithRelations = await getTaskWithRelations(taskId);
+    res.json(taskWithRelations ?? mapDocument(result));
+  } catch (err) {
+    console.error("[tasks update]", err);
+    res.status(500).json({ error: "No se pudo actualizar la tarea" });
   }
 });
 
