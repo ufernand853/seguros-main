@@ -25,6 +25,16 @@ type Carrier = {
 };
 
 const ESTADOS: Carrier["estado"][] = ["Activa", "En revisión", "Suspendida"];
+const DEFAULT_RAMO_OPTIONS = [
+  "Automotor",
+  "Hogar",
+  "Vida",
+  "Accidentes personales",
+  "Agro",
+  "Salud",
+  "Integral de comercio",
+  "Transporte",
+];
 
 function parseEstado(value?: string | null): Carrier["estado"] {
   if (value === "En revisión") return "En revisión";
@@ -71,6 +81,8 @@ export default function InsuranceCarriersMaintenance() {
   const [isLoading, setLoading] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [customRamos, setCustomRamos] = useState<string[]>([]);
+  const [newRamoOption, setNewRamoOption] = useState("");
   const [newCarrier, setNewCarrier] = useState<Carrier>({
     id: "",
     nombre: "",
@@ -105,11 +117,25 @@ export default function InsuranceCarriersMaintenance() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const allRamos = useMemo(() => {
+  const carrierRamos = useMemo(() => {
     const values = new Set<string>();
     carriers.forEach((carrier) => carrier.ramos.forEach((item) => values.add(item)));
     return Array.from(values).sort((a, b) => a.localeCompare(b, "es"));
   }, [carriers]);
+
+  const ramoOptions = useMemo(() => {
+    const combined = [...DEFAULT_RAMO_OPTIONS, ...customRamos, ...carrierRamos]
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const byValue = new Map<string, string>();
+    combined.forEach((value) => {
+      const key = value.toLowerCase();
+      if (!byValue.has(key)) byValue.set(key, value);
+    });
+
+    return Array.from(byValue.values()).sort((a, b) => a.localeCompare(b, "es"));
+  }, [carrierRamos, customRamos]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -139,6 +165,32 @@ export default function InsuranceCarriersMaintenance() {
 
   const selectedCarrier = filtered.find((item) => item.id === selectedId) ?? filtered[0];
 
+  const handleAddRamoOption = () => {
+    const value = newRamoOption.trim();
+    if (!value) return;
+
+    const exists = customRamos.some((item) => item.toLowerCase() === value.toLowerCase());
+    if (!exists) {
+      setCustomRamos((prev) => [...prev, value]);
+    }
+
+    setNewRamoOption("");
+
+    setNewCarrier((prev) => {
+      const alreadySelected = prev.ramos.some((item) => item.toLowerCase() === value.toLowerCase());
+      if (alreadySelected) return prev;
+      return { ...prev, ramos: [...prev.ramos, value] };
+    });
+  };
+
+  const handleRemoveCustomRamo = (value: string) => {
+    setCustomRamos((prev) => prev.filter((item) => item.toLowerCase() !== value.toLowerCase()));
+    setNewCarrier((prev) => ({
+      ...prev,
+      ramos: prev.ramos.filter((item) => item.toLowerCase() !== value.toLowerCase()),
+    }));
+  };
+
   const resumen = useMemo(() => {
     const totales = filtered.reduce(
       (acc, carrier) => {
@@ -161,7 +213,10 @@ export default function InsuranceCarriersMaintenance() {
   }, [filtered]);
 
   const handleSubmit = async () => {
-    const ramosLimpios = newCarrier.ramos.map((value) => value.trim()).filter(Boolean);
+    const ramosLimpios = newCarrier.ramos
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .filter((value, index, array) => array.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index);
     const acuerdosLimpios = newCarrier.acuerdosClaves.map((value) => value.trim()).filter(Boolean);
 
     if (!newCarrier.nombre.trim() || !newCarrier.pais.trim() || ramosLimpios.length === 0) {
@@ -255,6 +310,58 @@ export default function InsuranceCarriersMaintenance() {
         </div>
       )}
 
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Catálogo de ramos</p>
+            <h2 className="text-lg font-bold text-slate-900">Mantenimiento de ramos</h2>
+            <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+              Agrega o elimina ramos disponibles para las aseguradoras. Los ramos que definas aquí alimentan el combo
+              del formulario y el filtro de la tabla.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <input
+              value={newRamoOption}
+              onChange={(event) => setNewRamoOption(event.target.value)}
+              placeholder="Nuevo ramo (ej. Ingeniería)"
+              className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <button
+              type="button"
+              onClick={handleAddRamoOption}
+              className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+            >
+              Agregar ramo
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {ramoOptions.map((value) => {
+            const isCustom = customRamos.some((item) => item.toLowerCase() === value.toLowerCase());
+            return (
+              <span
+                key={value}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700"
+              >
+                {value}
+                {isCustom && (
+                  <button
+                    type="button"
+                    aria-label={`Eliminar ramo ${value}`}
+                    onClick={() => handleRemoveCustomRamo(value)}
+                    className="text-xs text-slate-500 hover:text-rose-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      </section>
+
       {showForm && (
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6">
           <div className="flex items-start justify-between gap-3">
@@ -309,15 +416,25 @@ export default function InsuranceCarriersMaintenance() {
             </label>
 
             <label className="flex flex-col text-sm text-slate-700 gap-1">
-              Ramos (separados por coma)
-              <input
-                value={newCarrier.ramos.join(", ")}
+              Ramos (selección múltiple)
+              <select
+                multiple
+                value={newCarrier.ramos}
                 onChange={(event) =>
-                  setNewCarrier((prev) => ({ ...prev, ramos: event.target.value.split(",").map((item) => item.trim()) }))
+                  setNewCarrier((prev) => ({
+                    ...prev,
+                    ramos: Array.from(event.target.selectedOptions).map((option) => option.value),
+                  }))
                 }
-                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                placeholder="Automotor, Vida"
-              />
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 h-full min-h-[120px]"
+              >
+                {ramoOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-500">Selecciona los ramos disponibles para esta aseguradora.</span>
             </label>
 
             <label className="flex flex-col text-sm text-slate-700 gap-1">
@@ -491,7 +608,7 @@ export default function InsuranceCarriersMaintenance() {
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
               >
                 <option value="todos">Todos</option>
-                {allRamos.map((value) => (
+                {ramoOptions.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
