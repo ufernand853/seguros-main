@@ -115,11 +115,13 @@ export async function apiListPipeline(accessToken: string): Promise<{ items: Pip
 
 export type TaskItem = {
   id: string;
+  client_id?: string | null;
   title: string;
   due_date?: string;
   status?: string;
   priority?: string | null;
-  owner?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
   client_name?: string | null;
 };
 
