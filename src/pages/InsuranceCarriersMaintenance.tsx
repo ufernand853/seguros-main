@@ -1,4 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../auth/AuthProvider";
+import { apiCreateInsurer, apiListInsurers, type CreateInsurerPayload, type InsurerListItem } from "../services/api";
 
 type Contact = {
   nombre: string;
@@ -18,157 +20,57 @@ type Carrier = {
   siniestralidad: number;
   contacto: Contact;
   acuerdosClaves: string[];
-  ultimaActualizacion: string;
-  notas?: string;
+  ultimaActualizacion: string | null;
+  notas?: string | null;
 };
 
-const CARRIERS: Carrier[] = [
-  {
-    id: "CAR-001",
-    nombre: "Seguros Río de la Plata",
-    pais: "Uruguay",
-    ramos: ["Automotor", "Hogar", "Vida"],
-    estado: "Activa",
-    calificacion: 4.6,
-    primasAnuales: 2450000,
-    polizasVigentes: 1260,
-    siniestralidad: 42,
-    contacto: {
-      nombre: "Laura Martínez",
-      email: "lmartinez@rioplata.com",
-      telefono: "+598 92 455 110",
-    },
-    acuerdosClaves: [
-      "Descuento flotas corporativas",
-      "Cobertura hogares premium",
-    ],
-    ultimaActualizacion: "2024-03-15",
-    notas: "Requiere reporte trimestral de producción.",
-  },
-  {
-    id: "CAR-002",
-    nombre: "Andes Reaseguros",
-    pais: "Chile",
-    ramos: ["Caución", "Ingeniería"],
-    estado: "En revisión",
-    calificacion: 4.1,
-    primasAnuales: 1875000,
-    polizasVigentes: 720,
-    siniestralidad: 36,
-    contacto: {
-      nombre: "Patricio González",
-      email: "pgonzalez@andesre.com",
-      telefono: "+56 9 3456 2100",
-    },
-    acuerdosClaves: [
-      "Capacidad ampliada para cauciones",
-      "Inspección técnica incluida",
-    ],
-    ultimaActualizacion: "2024-02-28",
-  },
-  {
-    id: "CAR-003",
-    nombre: "Atlántida Salud",
-    pais: "Argentina",
-    ramos: ["Salud"],
-    estado: "Activa",
-    calificacion: 4.8,
-    primasAnuales: 3280000,
-    polizasVigentes: 1980,
-    siniestralidad: 31,
-    contacto: {
-      nombre: "Cecilia Robledo",
-      email: "crobledo@atlantidasalud.com",
-      telefono: "+54 9 11 3880 2201",
-    },
-    acuerdosClaves: [
-      "Planes corporativos con upgrade dental",
-      "Bonificación por baja siniestralidad",
-    ],
-    ultimaActualizacion: "2024-04-07",
-    notas: "Solicitar actualización de cuadros médicos 2024.",
-  },
-  {
-    id: "CAR-004",
-    nombre: "Protec Industrial",
-    pais: "Brasil",
-    ramos: ["Riesgos industriales", "Responsabilidad civil"],
-    estado: "Suspendida",
-    calificacion: 3.2,
-    primasAnuales: 960000,
-    polizasVigentes: 310,
-    siniestralidad: 58,
-    contacto: {
-      nombre: "Rafael Souza",
-      email: "rsouza@protecbiz.com",
-      telefono: "+55 21 99540 8877",
-    },
-    acuerdosClaves: [
-      "Coberturas para construcción con franquicia",
-      "Asistencia ambiental 24/7",
-    ],
-    ultimaActualizacion: "2024-01-19",
-    notas: "Suspendida temporalmente por auditoría de compliance.",
-  },
-  {
-    id: "CAR-005",
-    nombre: "Mutual del Litoral",
-    pais: "Uruguay",
-    ramos: ["Vida", "Ahorro"],
-    estado: "Activa",
-    calificacion: 4.3,
-    primasAnuales: 1520000,
-    polizasVigentes: 890,
-    siniestralidad: 28,
-    contacto: {
-      nombre: "Gonzalo Cabrera",
-      email: "gcabrera@mutuallitoral.com",
-      telefono: "+598 95 887 432",
-    },
-    acuerdosClaves: [
-      "Campaña educativa para productores",
-      "Bonificación de comisiones por metas trimestrales",
-    ],
-    ultimaActualizacion: "2024-03-02",
-  },
-  {
-    id: "CAR-006",
-    nombre: "Latam Seguros Generales",
-    pais: "Perú",
-    ramos: ["Automotor", "PYMES", "Transporte"],
-    estado: "En revisión",
-    calificacion: 3.9,
-    primasAnuales: 2040000,
-    polizasVigentes: 1045,
-    siniestralidad: 47,
-    contacto: {
-      nombre: "María Fernanda Salas",
-      email: "mfsalas@latamgenerales.com",
-      telefono: "+51 987 665 432",
-    },
-    acuerdosClaves: [
-      "Cobertura transporte internacional",
-      "Programa de telemetría para flotas",
-    ],
-    ultimaActualizacion: "2024-03-27",
-  },
-];
-
 const ESTADOS: Carrier["estado"][] = ["Activa", "En revisión", "Suspendida"];
+
+function parseEstado(value?: string | null): Carrier["estado"] {
+  if (value === "En revisión") return "En revisión";
+  if (value === "Suspendida") return "Suspendida";
+  return "Activa";
+}
+
+function mapApiInsurerToCarrier(insurer: InsurerListItem): Carrier {
+  return {
+    id: insurer.id,
+    nombre: insurer.name ?? "Sin nombre",
+    pais: insurer.country ?? "—",
+    ramos: insurer.lines ?? [],
+    estado: parseEstado(insurer.status),
+    calificacion: insurer.rating ?? 0,
+    primasAnuales: insurer.annual_premium ?? 0,
+    polizasVigentes: insurer.active_policies ?? 0,
+    siniestralidad: insurer.loss_ratio ?? 0,
+    contacto: {
+      nombre: insurer.contact?.name ?? "—",
+      email: insurer.contact?.email ?? "—",
+      telefono: insurer.contact?.phone ?? "—",
+    },
+    acuerdosClaves: insurer.key_deals ?? [],
+    ultimaActualizacion: insurer.last_review ?? insurer.created_at ?? null,
+    notas: insurer.notes ?? null,
+  };
+}
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-UY", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 
-const formatDate = (isoDate: string) =>
-  new Intl.DateTimeFormat("es-UY", { dateStyle: "medium" }).format(new Date(isoDate));
+const formatDate = (isoDate: string | null) =>
+  isoDate ? new Intl.DateTimeFormat("es-UY", { dateStyle: "medium" }).format(new Date(isoDate)) : "Sin fecha";
 
 export default function InsuranceCarriersMaintenance() {
-  const [carriers, setCarriers] = useState<Carrier[]>(CARRIERS);
+  const { token } = useAuth();
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [search, setSearch] = useState("");
   const [estado, setEstado] = useState<string>("todos");
   const [ramo, setRamo] = useState<string>("todos");
-  const [selectedId, setSelectedId] = useState<string>(CARRIERS[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
+  const [isLoading, setLoading] = useState(false);
+  const [isSaving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [newCarrier, setNewCarrier] = useState<Carrier>({
     id: "",
     nombre: "",
@@ -184,6 +86,24 @@ export default function InsuranceCarriersMaintenance() {
     ultimaActualizacion: new Date().toISOString().slice(0, 10),
     notas: "",
   });
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+
+    apiListInsurers(token)
+      .then((data) => {
+        const mapped = data.items.map(mapApiInsurerToCarrier);
+        setCarriers(mapped);
+        setSelectedId((prev) => {
+          if (prev && mapped.some((item) => item.id === prev)) return prev;
+          return mapped[0]?.id ?? "";
+        });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar las aseguradoras"))
+      .finally(() => setLoading(false));
+  }, [token]);
 
   const allRamos = useMemo(() => {
     const values = new Set<string>();
@@ -240,39 +160,63 @@ export default function InsuranceCarriersMaintenance() {
     };
   }, [filtered]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const ramosLimpios = newCarrier.ramos.map((value) => value.trim()).filter(Boolean);
     const acuerdosLimpios = newCarrier.acuerdosClaves.map((value) => value.trim()).filter(Boolean);
 
     if (!newCarrier.nombre.trim() || !newCarrier.pais.trim() || ramosLimpios.length === 0) {
+      setError("Nombre, país y al menos un ramo son obligatorios");
       return;
     }
 
-    const nextId = `CAR-${(carriers.length + 1).toString().padStart(3, "0")}`;
-    const payload: Carrier = {
-      ...newCarrier,
-      id: nextId,
-      calificacion: Number(newCarrier.calificacion) || 0,
-      primasAnuales: Number(newCarrier.primasAnuales) || 0,
-      polizasVigentes: Number(newCarrier.polizasVigentes) || 0,
-      siniestralidad: Number(newCarrier.siniestralidad) || 0,
-      ramos: ramosLimpios,
-      acuerdosClaves: acuerdosLimpios,
+    if (!token) {
+      setError("Debes iniciar sesión para crear aseguradoras");
+      return;
+    }
+
+    const payload: CreateInsurerPayload = {
+      name: newCarrier.nombre.trim(),
+      country: newCarrier.pais.trim(),
+      lines: ramosLimpios,
+      status: newCarrier.estado,
+      rating: Number.isFinite(newCarrier.calificacion) ? Number(newCarrier.calificacion) : 0,
+      annual_premium: Number.isFinite(newCarrier.primasAnuales) ? Number(newCarrier.primasAnuales) : 0,
+      active_policies: Number.isFinite(newCarrier.polizasVigentes) ? Number(newCarrier.polizasVigentes) : 0,
+      loss_ratio: Number.isFinite(newCarrier.siniestralidad) ? Number(newCarrier.siniestralidad) : 0,
+      contact: {
+        name: newCarrier.contacto.nombre?.trim() || null,
+        email: newCarrier.contacto.email?.trim() || null,
+        phone: newCarrier.contacto.telefono?.trim() || null,
+      },
+      key_deals: acuerdosLimpios,
+      last_review: newCarrier.ultimaActualizacion || null,
+      notes: newCarrier.notas?.trim() || null,
     };
 
-    setCarriers((prev) => [...prev, payload]);
-    setSelectedId(nextId);
-    setShowForm(false);
-    setNewCarrier({
-      ...newCarrier,
-      id: "",
-      nombre: "",
-      pais: "",
-      ramos: [],
-      acuerdosClaves: [],
-      notas: "",
-      ultimaActualizacion: new Date().toISOString().slice(0, 10),
-    });
+    setSaving(true);
+    setError(null);
+
+    try {
+      const created = await apiCreateInsurer(payload, token);
+      const mapped = mapApiInsurerToCarrier(created);
+      setCarriers((prev) => [...prev, mapped].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
+      setSelectedId(mapped.id);
+      setShowForm(false);
+      setNewCarrier({
+        ...newCarrier,
+        id: "",
+        nombre: "",
+        pais: "",
+        ramos: [],
+        acuerdosClaves: [],
+        notas: "",
+        ultimaActualizacion: new Date().toISOString().slice(0, 10),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar la aseguradora");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -304,6 +248,12 @@ export default function InsuranceCarriersMaintenance() {
           <ResumenCard title="Siniestralidad promedio" value={`${resumen.siniestralidadPromedio}%`} subtitle="Sobre las filtradas" />
         </dl>
       </header>
+
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          {error}
+        </div>
+      )}
 
       {showForm && (
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6">
@@ -484,9 +434,10 @@ export default function InsuranceCarriersMaintenance() {
             <button
               type="button"
               onClick={handleSubmit}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+              disabled={isSaving}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Guardar aseguradora
+              {isSaving ? "Guardando..." : "Guardar aseguradora"}
             </button>
             <p className="text-xs text-slate-500">
               Se asignará un ID automático y quedará disponible en la tabla y el panel lateral.
@@ -548,6 +499,12 @@ export default function InsuranceCarriersMaintenance() {
               </select>
             </div>
           </div>
+
+          {isLoading && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Cargando aseguradoras…
+            </div>
+          )}
 
           <div className="mt-6 overflow-auto -mx-4 md:mx-0">
             <table className="min-w-full divide-y divide-slate-200">
@@ -729,4 +686,3 @@ function DetailItem({ label, value }: DetailItemProps) {
     </div>
   );
 }
-
