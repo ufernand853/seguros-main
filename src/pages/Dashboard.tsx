@@ -11,6 +11,7 @@ const TILES: Tile[] = [
   { label: "Clientes", path: "/clientes", bg: "bg-blue-600 hover:bg-blue-700" },
   { label: "Aseguradoras", path: "/aseguradoras", bg: "bg-sky-600 hover:bg-sky-700" },
   { label: "Ficha integral cliente", path: "/clientes/ficha", bg: "bg-teal-600 hover:bg-teal-700" },
+  { label: "Registro de siniestro", path: "/siniestros/registro", bg: "bg-slate-700 hover:bg-slate-800" },
   { label: "Configuración", path: "/configuracion", bg: "bg-slate-700 hover:bg-slate-800" },
 ];
 
