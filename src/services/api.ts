@@ -133,39 +133,30 @@ export async function apiListTasks(accessToken: string): Promise<{ items: TaskIt
   });
 }
 
-export type CreateTaskPayload = {
-  title: string;
-  client_id?: string | null;
-  due_date?: string | null;
-  status?: string;
-  priority?: string | null;
-  owner_id?: string | null;
+export type EmployeeItem = {
+  id: string;
+  name: string;
+  role?: string | null;
+  email?: string | null;
 };
 
-export async function apiCreateTask(payload: CreateTaskPayload, accessToken: string): Promise<TaskItem> {
-  return request("/tasks", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function apiUpdateTask(
-  taskId: string,
-  payload: Partial<CreateTaskPayload>,
-  accessToken: string,
-): Promise<TaskItem> {
-  return request(`/tasks/${taskId}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
+export async function apiListEmployees(accessToken: string): Promise<{ items: EmployeeItem[] }> {
+  try {
+    return await request("/employees", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  } catch (error) {
+    // Fallback demo data while the backend expone el endpoint real
+    return {
+      items: [
+        { id: "ops-1", name: "Equipo Siniestros", role: "operaciones", email: "siniestros@segurosdemo.com" },
+        { id: "ops-2", name: "Backoffice", role: "operaciones", email: "backoffice@segurosdemo.com" },
+        { id: "ops-3", name: "Productor", role: "comercial", email: "productor@segurosdemo.com" },
+      ],
+    };
+  }
 }
 
 export type RenewalItem = {
