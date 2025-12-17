@@ -842,8 +842,8 @@ app.use((err, _req, res, _next) => {
 
 connectToDatabase()
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(`[api] listening on http://localhost:${PORT}`);
+    app.listen(PORT, "127.0.0.1", () => {
+      console.log(`[api] listening on http://127.0.0.1:${PORT}`);
     });
   })
   .catch((err) => {
