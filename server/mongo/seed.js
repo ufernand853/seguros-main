@@ -409,14 +409,32 @@ const claims = [
   },
 ];
 
-const user = {
-  _id: userId,
-  name: "Admin Demo",
-  email: "demo@seguros.test",
-  password_hash:
-    "6e3474554fa36f94f14c299eb4c14785:3461a159e8d1083e070ea1c8bb253723c3006fd2dfff3a80541244421a8ebdcc7f5963daf42fac03113853e055f75ddd8f6465a6412e46ad67108d5c26eaf697",
-  role: "admin",
-};
+const users = [
+  {
+    _id: userId,
+    name: "Admin Demo",
+    email: "demo@seguros.test",
+    password_hash:
+      "6e3474554fa36f94f14c299eb4c14785:3461a159e8d1083e070ea1c8bb253723c3006fd2dfff3a80541244421a8ebdcc7f5963daf42fac03113853e055f75ddd8f6465a6412e46ad67108d5c26eaf697",
+    role: "admin",
+  },
+  {
+    _id: randomUUID(),
+    name: "Ejecutivo Comercial",
+    email: "ejecutivo@segurosdemo.com",
+    password_hash:
+      "c4345de881d450bf42d9949c1556d215:ae41f62ca4acee051f4ce928d4d800a525203b5a74ee38b9f4c9cc51ad7d4a5be213e0c236fed4e6cca7f6b5f1c0741fcb0b4042e24f45b7fc3af8ba6ceb4b3f",
+    role: "ejecutivo",
+  },
+  {
+    _id: randomUUID(),
+    name: "Operador Backoffice",
+    email: "operaciones@segurosdemo.com",
+    password_hash:
+      "542d63a19808a1d19565f8645c720cbc:00e69436f12d6d99767f0efd7c44f75e4b7f8221565275a40f1c007bc591467f94cb9e9c0a5c8ac85fe6a875e34ff91a7c024f523f0186efa9e7fc201d66bfab",
+    role: "operaciones",
+  },
+];
 
 async function seed() {
   const db = await connectToDatabase();
@@ -431,7 +449,7 @@ async function seed() {
   await db.collection("insurers").deleteMany({});
   await db.collection("employees").deleteMany({});
 
-  await db.collection("users").insertOne(user);
+  await db.collection("users").insertMany(users);
   await db.collection("insurers").insertMany(insurers);
   await db.collection("clients").insertMany(clients);
   await db.collection("employees").insertMany(employees);
