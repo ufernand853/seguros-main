@@ -50,7 +50,7 @@ export default function Clientes() {
     );
   }, [clientes, debounced]);
 
-  const open = (c: Cliente) => navigate(`/clientes?sel=${encodeURIComponent(c.id)}`);
+  const open = (c: Cliente) => navigate(`/clientes/${encodeURIComponent(c.id)}`);
 
   const nuevo = () => navigate("/clientes/nuevo");
   const verFicha = () => navigate("/clientes/ficha");

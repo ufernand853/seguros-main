@@ -94,6 +94,21 @@ export async function apiListClients(accessToken: string): Promise<{ items: Clie
   });
 }
 
+export type ClientSummary = ClientListItem & {
+  tasks?: TaskItem[];
+  opportunity?: PipelineItem | null;
+  renewal?: RenewalItem | null;
+  nextTask?: TaskItem | null;
+};
+
+export async function apiGetClientSummary(clientId: string, accessToken: string): Promise<ClientSummary> {
+  return request(`/clients/${clientId}/summary`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export type PipelineItem = {
   id: string;
   client_id?: string;
