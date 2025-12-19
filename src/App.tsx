@@ -15,6 +15,7 @@ import Client360View from "./pages/Client360View";
 import InsuranceCarriersMaintenance from "./pages/InsuranceCarriersMaintenance";
 import ClientesPolizasDemo from "./pages/ClientesPolizasDemo";
 import ClaimRegistration from "./pages/ClaimRegistration";
+import UserManagement from "./pages/UserManagement";
 
 
 
@@ -42,7 +43,7 @@ export default function App() {
       <Route path="/clientes/ficha" element={withLayout(<Client360View />)} />
       <Route path="/clientes/polizas-demo" element={withLayout(<ClientesPolizasDemo />)} />
       <Route path="/siniestros/registro" element={withLayout(<ClaimRegistration />)} />
-      <Route path="/configuracion" element={withLayout(<Placeholder />)} />
+      <Route path="/configuracion" element={withLayout(<UserManagement />)} />
 
 
       {/* Redirect raíz */}

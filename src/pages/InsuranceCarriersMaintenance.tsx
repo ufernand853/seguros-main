@@ -71,7 +71,7 @@ const formatDate = (isoDate: string | null) =>
   isoDate ? new Intl.DateTimeFormat("es-UY", { dateStyle: "medium" }).format(new Date(isoDate)) : "Sin fecha";
 
 export default function InsuranceCarriersMaintenance() {
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [search, setSearch] = useState("");
   const [estado, setEstado] = useState<string>("todos");
@@ -740,10 +740,20 @@ export default function InsuranceCarriersMaintenance() {
 
               <button
                 type="button"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                disabled={!isAdmin}
+                className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm ${
+                  isAdmin
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                    : "bg-slate-300 text-slate-700 cursor-not-allowed"
+                }`}
               >
                 Editar información
               </button>
+              {!isAdmin && (
+                <p className="text-xs text-slate-500 text-right">
+                  Solo los administradores pueden editar los datos de la aseguradora.
+                </p>
+              )}
             </div>
           ) : (
             <div className="mt-8 text-sm text-slate-500">Selecciona una aseguradora para ver sus detalles.</div>

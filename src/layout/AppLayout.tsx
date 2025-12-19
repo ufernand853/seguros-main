@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -18,6 +18,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           >
             Dashboard
           </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate("/configuracion")}
+              className="px-3 py-2 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium"
+            >
+              Configuración
+            </button>
+          )}
         </div>
         <button
           type="button"

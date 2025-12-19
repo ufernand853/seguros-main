@@ -48,6 +48,41 @@ export async function apiRefresh(refreshToken: string): Promise<{ accessToken: s
   });
 }
 
+export type UserItem = { id: string; name: string; email: string; role?: string | null };
+
+export async function apiListUsers(accessToken: string): Promise<{ items: UserItem[] }> {
+  return request("/users", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export type CreateUserPayload = { name: string; email: string; password: string; role: "admin" | "operador" | "consulta" };
+
+export async function apiCreateUser(payload: CreateUserPayload, accessToken: string): Promise<UserItem> {
+  return request("/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+}
+
+export type UpdateUserPayload = Partial<{ name: string; password: string; role: "admin" | "operador" | "consulta" }>;
+
+export async function apiUpdateUser(userId: string, payload: UpdateUserPayload, accessToken: string): Promise<UserItem> {
+  return request(`/users/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteUser(userId: string, accessToken: string) {
+  return request(`/users/${userId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 export type CreateClientPayload = {
   name: string;
   document: string;
@@ -63,6 +98,34 @@ export async function apiCreateClient(payload: CreateClientPayload, accessToken:
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export type UpdateClientPayload = Partial<{
+  name: string;
+  document: string;
+  city: string | null;
+  contacts: ContactInfo[];
+  policies: PolicySummary[];
+}>;
+
+export async function apiUpdateClient(clientId: string, payload: UpdateClientPayload, accessToken: string) {
+  return request(`/clients/${clientId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteClient(clientId: string, accessToken: string) {
+  return request(`/clients/${clientId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 
@@ -272,6 +335,28 @@ export async function apiCreateInsurer(payload: CreateInsurerPayload, accessToke
   });
 }
 
+export type UpdateInsurerPayload = Partial<CreateInsurerPayload>;
+
+export async function apiUpdateInsurer(insurerId: string, payload: UpdateInsurerPayload, accessToken: string): Promise<InsurerListItem> {
+  return request(`/insurers/${insurerId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteInsurer(insurerId: string, accessToken: string) {
+  return request(`/insurers/${insurerId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export type ClaimItem = {
   id: string;
   client_id: string;
@@ -334,6 +419,45 @@ export async function apiCreateClaim(payload: CreateClaimPayload, accessToken: s
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export type UpdateClaimPayload = Partial<{
+  type: string;
+  event_date: string | null;
+  event_time: string | null;
+  location: string;
+  description: string;
+  priority: string | null;
+  channel: string | null;
+  status: string | null;
+  third_party_damage: boolean;
+  tow_needed: boolean;
+  internal_owner: string | null;
+  notify_client: boolean;
+  notify_broker: boolean;
+  notes: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+}>;
+
+export async function apiUpdateClaim(claimId: string, payload: UpdateClaimPayload, accessToken: string): Promise<{ item: ClaimItem }> {
+  return request(`/claims/${claimId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteClaim(claimId: string, accessToken: string) {
+  return request(`/claims/${claimId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 
