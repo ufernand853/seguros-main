@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 import ViewFilesModal, { ViewFileItem } from "../components/ViewFilesModal";
 
 // Mock de clientes (reutilizá el real cuando tengas API)
@@ -50,6 +51,7 @@ const MOCK: Cliente[] = [
 export default function ClienteDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   const cliente = useMemo(
     () => MOCK.find((c) => c.id === (id ?? "")) ?? MOCK[0],
@@ -59,6 +61,7 @@ export default function ClienteDetalle() {
   // Estado del form (clonado del cliente)
   const [form, setForm] = useState<Cliente>({ ...cliente });
   const [isEditing, setIsEditing] = useState(false);
+  const canEdit = isAdmin;
 
   // Modales de visualización (solo lectura)
   const [showDocModal, setShowDocModal] = useState(false);
@@ -70,7 +73,7 @@ export default function ClienteDetalle() {
   const onCancel = () => navigate("/clientes");
 
   const onSave = () => {
-    if (!isEditing) return; // Guardar deshabilitado si no está en edición
+    if (!isEditing || !canEdit) return; // Guardar deshabilitado si no está en edición
     // TODO: enviar a API (PUT/PATCH). Por ahora, simulamos.
     console.log("Guardar cambios", form);
     setIsEditing(false);
@@ -265,10 +268,10 @@ export default function ClienteDetalle() {
         </button>
         <button
           type="button"
-          disabled={!isEditing}
+          disabled={!isEditing || !canEdit}
           onClick={onSave}
           className={`px-4 py-2 rounded-lg text-white font-semibold ${
-            isEditing
+            isEditing && canEdit
               ? "bg-emerald-600 hover:bg-emerald-700"
               : "bg-emerald-300 cursor-not-allowed"
           }`}
@@ -277,12 +280,20 @@ export default function ClienteDetalle() {
         </button>
         <button
           type="button"
-          onClick={() => setIsEditing((s) => !s)}
-          className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-black text-white font-semibold"
+          disabled={!canEdit}
+          onClick={() => canEdit && setIsEditing((s) => !s)}
+          className={`px-4 py-2 rounded-lg text-white font-semibold ${
+            canEdit ? "bg-slate-900 hover:bg-black" : "bg-slate-400 cursor-not-allowed"
+          }`}
         >
           {isEditing ? "Salir de edición" : "Editar"}
         </button>
       </div>
+      {!canEdit && (
+        <p className="text-sm text-slate-500 text-right">
+          Solo los administradores pueden editar la ficha del cliente.
+        </p>
+      )}
 
       {/* Modales solo lectura */}
       <ViewFilesModal

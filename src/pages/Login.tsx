@@ -19,7 +19,7 @@ export default function Login() {
     try {
       const response = await apiLogin(email, password);
       login(
-        { name: response.user.name, email: response.user.email },
+        { id: response.user.id, name: response.user.name, email: response.user.email, role: response.user.role ?? null },
         response.accessToken,
         Math.floor(response.expiresInSeconds / 60),
       );

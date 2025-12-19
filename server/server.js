@@ -2,7 +2,7 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import jwt from "jsonwebtoken";
-import { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { closeConnection, connectToDatabase, getDb } from "./db.js";
 
 const PORT = process.env.PORT || 4000;
@@ -33,6 +33,22 @@ function mapDocument(doc) {
   if (!doc) return null;
   const { _id, ...rest } = doc;
   return { id: String(_id), ...rest };
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Requiere rol de administrador" });
+  }
+  return next();
+}
+
+const ALLOWED_ROLES = new Set(["admin", "operador", "consulta"]);
+
+function hashPassword(password) {
+  if (!password) throw new Error("Contraseña requerida");
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
 }
 
 const TASK_STATUSES = new Set(["pendiente", "en_curso", "completada"]);
@@ -407,6 +423,181 @@ api.post("/claims", authenticate, async (req, res) => {
   }
 });
 
+api.patch("/claims/:id", authenticate, requireAdmin, async (req, res) => {
+  const claimId = req.params.id;
+  const {
+    type,
+    event_date,
+    event_time,
+    location,
+    description,
+    priority,
+    channel,
+    status,
+    third_party_damage,
+    tow_needed,
+    internal_owner,
+    notify_client,
+    notify_broker,
+    notes,
+    contact_email,
+    contact_phone,
+  } = req.body || {};
+
+  const updates = {};
+  if (type !== undefined) {
+    if (!type) return res.status(400).json({ error: "El tipo es obligatorio" });
+    updates.type = type;
+  }
+  if (event_date !== undefined) {
+    const parsed = event_date ? new Date(event_date) : null;
+    if (parsed && Number.isNaN(parsed.getTime())) return res.status(400).json({ error: "Fecha de siniestro inválida" });
+    updates.event_date = parsed;
+  }
+  if (event_time !== undefined) updates.event_time = event_time ?? null;
+  if (location !== undefined) {
+    if (!location) return res.status(400).json({ error: "La ubicación es obligatoria" });
+    updates.location = location;
+  }
+  if (description !== undefined) {
+    if (!description) return res.status(400).json({ error: "La descripción es obligatoria" });
+    updates.description = description;
+  }
+  if (priority !== undefined) updates.priority = priority ?? null;
+  if (channel !== undefined) updates.channel = channel ?? null;
+  if (status !== undefined) updates.status = status ?? null;
+  if (third_party_damage !== undefined) updates.third_party_damage = !!third_party_damage;
+  if (tow_needed !== undefined) updates.tow_needed = !!tow_needed;
+  if (internal_owner !== undefined) updates.internal_owner = internal_owner ?? null;
+  if (notify_client !== undefined) updates.notify_client = !!notify_client;
+  if (notify_broker !== undefined) updates.notify_broker = !!notify_broker;
+  if (notes !== undefined) updates.notes = notes ?? null;
+  if (contact_email !== undefined) updates.contact_email = contact_email ?? null;
+  if (contact_phone !== undefined) updates.contact_phone = contact_phone ?? null;
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Sin cambios" });
+
+  try {
+    const db = getDb();
+    const result = await db
+      .collection("claims")
+      .findOneAndUpdate({ _id: claimId }, { $set: { ...updates, updated_at: new Date() } }, { returnDocument: "after" });
+    if (!result) return res.status(404).json({ error: "Siniestro no encontrado" });
+
+    const [item] = await aggregateClaims({ _id: claimId });
+    res.json({ item: item ?? mapDocument(result) });
+  } catch (err) {
+    console.error("[claims update]", err);
+    res.status(500).json({ error: "No se pudo actualizar el siniestro" });
+  }
+});
+
+api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
+  const claimId = req.params.id;
+  try {
+    const db = getDb();
+    const result = await db.collection("claims").findOneAndDelete({ _id: claimId });
+    if (!result) return res.status(404).json({ error: "Siniestro no encontrado" });
+    res.json({ ok: true, id: claimId });
+  } catch (err) {
+    console.error("[claims delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el siniestro" });
+  }
+});
+
+api.get("/users", authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db
+      .collection("users")
+      .find({}, { projection: { password_hash: 0 } })
+      .sort({ name: 1 })
+      .toArray();
+    res.json({ items: rows.map(mapDocument) });
+  } catch (err) {
+    console.error("[users list]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los usuarios" });
+  }
+});
+
+api.post("/users", authenticate, requireAdmin, async (req, res) => {
+  const { name, email, password, role } = req.body || {};
+  if (!name || !email || !password || !role) return res.status(400).json({ error: "Nombre, email, contraseña y rol son obligatorios" });
+  if (!ALLOWED_ROLES.has(role)) return res.status(400).json({ error: "Rol inválido" });
+
+  try {
+    const db = getDb();
+    const emailLower = email.toLowerCase();
+    const exists = await db.collection("users").findOne({ email: emailLower });
+    if (exists) return res.status(409).json({ error: "El email ya está registrado" });
+
+    const userDoc = {
+      _id: randomUUID(),
+      name,
+      email: emailLower,
+      password_hash: hashPassword(password),
+      role,
+      created_at: new Date(),
+    };
+
+    await db.collection("users").insertOne(userDoc);
+    const safeUser = mapDocument(userDoc);
+    delete safeUser.password_hash;
+    res.status(201).json(safeUser);
+  } catch (err) {
+    console.error("[users create]", err);
+    res.status(500).json({ error: "No se pudo crear el usuario" });
+  }
+});
+
+api.patch("/users/:id", authenticate, requireAdmin, async (req, res) => {
+  const userId = req.params.id;
+  const { name, password, role } = req.body || {};
+
+  const updates = {};
+  if (name !== undefined) {
+    if (!name) return res.status(400).json({ error: "El nombre es obligatorio" });
+    updates.name = name;
+  }
+  if (role !== undefined) {
+    if (!ALLOWED_ROLES.has(role)) return res.status(400).json({ error: "Rol inválido" });
+    updates.role = role;
+  }
+  if (password !== undefined) {
+    if (!password) return res.status(400).json({ error: "La contraseña no puede estar vacía" });
+    updates.password_hash = hashPassword(password);
+  }
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Sin cambios" });
+
+  try {
+    const db = getDb();
+    const result = await db
+      .collection("users")
+      .findOneAndUpdate({ _id: userId }, { $set: { ...updates, updated_at: new Date() } }, { returnDocument: "after" });
+    if (!result) return res.status(404).json({ error: "Usuario no encontrado" });
+    const safeUser = mapDocument(result);
+    delete safeUser.password_hash;
+    res.json(safeUser);
+  } catch (err) {
+    console.error("[users update]", err);
+    res.status(500).json({ error: "No se pudo actualizar el usuario" });
+  }
+});
+
+api.delete("/users/:id", authenticate, requireAdmin, async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const db = getDb();
+    const result = await db.collection("users").findOneAndDelete({ _id: userId });
+    if (!result) return res.status(404).json({ error: "Usuario no encontrado" });
+    res.json({ ok: true, id: userId });
+  } catch (err) {
+    console.error("[users delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el usuario" });
+  }
+});
+
 api.post("/clients", authenticate, async (req, res) => {
   const { name, document, city, contacts, policies } = req.body || {};
   if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
@@ -444,6 +635,72 @@ api.post("/clients", authenticate, async (req, res) => {
   } catch (err) {
     console.error("[clients create]", err);
     res.status(500).json({ error: "No se pudo crear el cliente" });
+  }
+});
+
+api.patch("/clients/:id", authenticate, requireAdmin, async (req, res) => {
+  const clientId = req.params.id;
+  const { name, document, city, contacts, policies } = req.body || {};
+
+  const updates = {};
+  if (name !== undefined) {
+    if (!name) return res.status(400).json({ error: "El nombre no puede estar vacío" });
+    updates.name = name;
+  }
+  if (document !== undefined) {
+    if (!document) return res.status(400).json({ error: "El documento es obligatorio" });
+    updates.document = document;
+  }
+  if (city !== undefined) {
+    updates.city = city ?? null;
+  }
+  if (contacts !== undefined) {
+    if (!Array.isArray(contacts)) return res.status(400).json({ error: "Contacts debe ser un arreglo" });
+    updates.contacts = contacts.map((contact) => ({
+      id: contact.id ?? randomUUID(),
+      name: contact.name ?? "",
+      email: contact.email ?? null,
+      phone: contact.phone ?? null,
+    }));
+  }
+  if (policies !== undefined) {
+    if (!Array.isArray(policies)) return res.status(400).json({ error: "Policies debe ser un arreglo" });
+    updates.policies = policies.map((policy) => ({
+      id: policy.id ?? randomUUID(),
+      type: policy.type ?? null,
+      insurer_id: policy.insurer_id ?? null,
+      status: policy.status ?? null,
+      premium: typeof policy.premium === "number" ? policy.premium : null,
+      next_renewal: policy.next_renewal ? new Date(policy.next_renewal) : null,
+    }));
+  }
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Sin cambios" });
+
+  try {
+    const db = getDb();
+    const result = await db
+      .collection("clients")
+      .findOneAndUpdate({ _id: clientId }, { $set: { ...updates, updated_at: new Date() } }, { returnDocument: "after" });
+
+    if (!result) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(mapDocument(result));
+  } catch (err) {
+    console.error("[clients update]", err);
+    res.status(500).json({ error: "No se pudo actualizar el cliente" });
+  }
+});
+
+api.delete("/clients/:id", authenticate, requireAdmin, async (req, res) => {
+  const clientId = req.params.id;
+  try {
+    const db = getDb();
+    const result = await db.collection("clients").findOneAndDelete({ _id: clientId });
+    if (!result) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json({ ok: true, id: clientId });
+  } catch (err) {
+    console.error("[clients delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el cliente" });
   }
 });
 
@@ -838,6 +1095,70 @@ api.post("/insurers", authenticate, async (req, res) => {
   } catch (err) {
     console.error("[insurers create]", err);
     res.status(500).json({ error: "No se pudo crear la aseguradora" });
+  }
+});
+
+api.patch("/insurers/:id", authenticate, requireAdmin, async (req, res) => {
+  const insurerId = req.params.id;
+  const { name, country, lines, status, rating, annual_premium, active_policies, loss_ratio, contact, key_deals, last_review, notes } =
+    req.body || {};
+
+  const updates = {};
+  if (name !== undefined) {
+    if (!name) return res.status(400).json({ error: "El nombre es obligatorio" });
+    updates.name = name;
+  }
+  if (country !== undefined) updates.country = country ?? null;
+  if (lines !== undefined) {
+    if (!Array.isArray(lines)) return res.status(400).json({ error: "Lines debe ser un arreglo" });
+    updates.lines = lines;
+  }
+  if (status !== undefined) updates.status = status ?? "Activa";
+  if (rating !== undefined) updates.rating = typeof rating === "number" ? rating : null;
+  if (annual_premium !== undefined) updates.annual_premium = typeof annual_premium === "number" ? annual_premium : null;
+  if (active_policies !== undefined) updates.active_policies = typeof active_policies === "number" ? active_policies : null;
+  if (loss_ratio !== undefined) updates.loss_ratio = typeof loss_ratio === "number" ? loss_ratio : null;
+  if (contact !== undefined) {
+    updates.contact = contact
+      ? {
+          name: contact.name ?? null,
+          email: contact.email ?? null,
+          phone: contact.phone ?? null,
+        }
+      : null;
+  }
+  if (key_deals !== undefined) {
+    if (!Array.isArray(key_deals)) return res.status(400).json({ error: "Key deals debe ser un arreglo" });
+    updates.key_deals = key_deals;
+  }
+  if (last_review !== undefined) updates.last_review = last_review ? new Date(last_review) : null;
+  if (notes !== undefined) updates.notes = notes ?? null;
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Sin cambios" });
+
+  try {
+    const db = getDb();
+    const result = await db
+      .collection("insurers")
+      .findOneAndUpdate({ _id: insurerId }, { $set: { ...updates, updated_at: new Date() } }, { returnDocument: "after" });
+    if (!result) return res.status(404).json({ error: "Aseguradora no encontrada" });
+    res.json(mapDocument(result));
+  } catch (err) {
+    console.error("[insurers update]", err);
+    res.status(500).json({ error: "No se pudo actualizar la aseguradora" });
+  }
+});
+
+api.delete("/insurers/:id", authenticate, requireAdmin, async (req, res) => {
+  const insurerId = req.params.id;
+  try {
+    const db = getDb();
+    const result = await db.collection("insurers").findOneAndDelete({ _id: insurerId });
+    if (!result) return res.status(404).json({ error: "Aseguradora no encontrada" });
+    res.json({ ok: true, id: insurerId });
+  } catch (err) {
+    console.error("[insurers delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la aseguradora" });
   }
 });
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type User = { name: string; email?: string };
+type User = { id?: string; name: string; email?: string; role?: string | null };
 type AuthState = {
   user: User | null;
   token: string | null;
@@ -9,6 +9,7 @@ type AuthState = {
 
 type AuthContextType = {
   isAuthed: boolean;
+  isAdmin: boolean;
   user: User | null;
   token: string | null;
   login: (u: User, token?: string, ttlMinutes?: number) => void;
@@ -52,19 +53,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     writeStorage(state);
   }, [state]);
 
-  const api = useMemo<AuthContextType>(() => ({
-    isAuthed: !!state.user && !!state.token && (!state.expiresAt || Date.now() < state.expiresAt),
-    user: state.user,
-    token: state.token,
-    login: (u, token = "mock-token", ttlMinutes = 120) => {
-      const expiresAt = Date.now() + ttlMinutes * 60_000;
-      setState({ user: u, token, expiresAt });
-    },
-    logout: () => {
-      setState({ user: null, token: null, expiresAt: null });
-      localStorage.removeItem(STORAGE_KEY);
-    },
-  }), [state]);
+  const api = useMemo<AuthContextType>(() => {
+    const isAuthed = !!state.user && !!state.token && (!state.expiresAt || Date.now() < state.expiresAt);
+    const isAdmin = state.user?.role === "admin";
+
+    return {
+      isAuthed,
+      isAdmin,
+      user: state.user,
+      token: state.token,
+      login: (u, token = "mock-token", ttlMinutes = 120) => {
+        const expiresAt = Date.now() + ttlMinutes * 60_000;
+        setState({ user: u, token, expiresAt });
+      },
+      logout: () => {
+        setState({ user: null, token: null, expiresAt: null });
+        localStorage.removeItem(STORAGE_KEY);
+      },
+    };
+  }, [state]);
 
   return <AuthContext.Provider value={api}>{children}</AuthContext.Provider>;
 }
