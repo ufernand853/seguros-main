@@ -139,7 +139,13 @@ async function authenticate(req, res, next) {
   }
 }
 
-app.get("/health", async (_req, res) => {
+const api = express.Router();
+
+// Compatibilidad: redirige /health a /api/health (si algún monitoreo antiguo lo usa)
+app.get("/health", (_req, res) => res.redirect(307, "/api/health"));
+
+// Todas las rutas del backend quedan bajo el prefijo /api
+api.get("/health", async (_req, res) => {
   try {
     const db = getDb();
     await db.command({ ping: 1 });
@@ -150,7 +156,7 @@ app.get("/health", async (_req, res) => {
   }
 });
 
-app.post("/auth/login", async (req, res) => {
+api.post("/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: "Email y contraseña requeridos" });
   try {
@@ -173,7 +179,7 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-app.post("/auth/refresh", async (req, res) => {
+api.post("/auth/refresh", async (req, res) => {
   const { refreshToken } = req.body || {};
   if (!refreshToken) return res.status(400).json({ error: "Refresh token requerido" });
   try {
@@ -190,7 +196,7 @@ app.post("/auth/refresh", async (req, res) => {
   }
 });
 
-app.post("/auth/logout", async (req, res) => {
+api.post("/auth/logout", async (req, res) => {
   const { refreshToken } = req.body || {};
   if (refreshToken) {
     try {
@@ -203,7 +209,7 @@ app.post("/auth/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/clients", authenticate, async (_req, res) => {
+api.get("/clients", authenticate, async (_req, res) => {
   try {
     const db = getDb();
     const items = await db
@@ -318,7 +324,7 @@ async function aggregateClaims(filter = {}) {
   return rows.map(mapDocument);
 }
 
-app.get("/claims", authenticate, async (_req, res) => {
+api.get("/claims", authenticate, async (_req, res) => {
   try {
     const items = await aggregateClaims();
     res.json({ items });
@@ -328,7 +334,7 @@ app.get("/claims", authenticate, async (_req, res) => {
   }
 });
 
-app.post("/claims", authenticate, async (req, res) => {
+api.post("/claims", authenticate, async (req, res) => {
   const {
     client_id,
     policy_id,
@@ -401,7 +407,7 @@ app.post("/claims", authenticate, async (req, res) => {
   }
 });
 
-app.post("/clients", authenticate, async (req, res) => {
+api.post("/clients", authenticate, async (req, res) => {
   const { name, document, city, contacts, policies } = req.body || {};
   if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
 
@@ -441,7 +447,7 @@ app.post("/clients", authenticate, async (req, res) => {
   }
 });
 
-app.get("/clients/:id/summary", authenticate, async (req, res) => {
+api.get("/clients/:id/summary", authenticate, async (req, res) => {
   const clientId = req.params.id;
   try {
     const db = getDb();
@@ -526,7 +532,7 @@ app.get("/clients/:id/summary", authenticate, async (req, res) => {
   }
 });
 
-app.get("/pipeline", authenticate, async (_req, res) => {
+api.get("/pipeline", authenticate, async (_req, res) => {
   try {
     const db = getDb();
     const rows = await db
@@ -565,7 +571,7 @@ app.get("/pipeline", authenticate, async (_req, res) => {
   }
 });
 
-app.get("/employees", authenticate, async (_req, res) => {
+api.get("/employees", authenticate, async (_req, res) => {
   try {
     const db = getDb();
     const rows = await db
@@ -580,7 +586,7 @@ app.get("/employees", authenticate, async (_req, res) => {
   }
 });
 
-app.post("/employees", authenticate, async (req, res) => {
+api.post("/employees", authenticate, async (req, res) => {
   const { name, email, role, team } = req.body || {};
   if (!name) return res.status(400).json({ error: "Nombre requerido" });
 
@@ -603,7 +609,7 @@ app.post("/employees", authenticate, async (req, res) => {
   }
 });
 
-app.get("/tasks", authenticate, async (_req, res) => {
+api.get("/tasks", authenticate, async (_req, res) => {
   try {
     const db = getDb();
     const rows = await db
@@ -653,7 +659,7 @@ app.get("/tasks", authenticate, async (_req, res) => {
   }
 });
 
-app.post("/tasks", authenticate, async (req, res) => {
+api.post("/tasks", authenticate, async (req, res) => {
   const { title, client_id, due_date, status, priority, owner_id } = req.body || {};
   if (!title) return res.status(400).json({ error: "Título requerido" });
 
@@ -693,7 +699,7 @@ app.post("/tasks", authenticate, async (req, res) => {
   }
 });
 
-app.patch("/tasks/:id", authenticate, async (req, res) => {
+api.patch("/tasks/:id", authenticate, async (req, res) => {
   const taskId = req.params.id;
   const { title, client_id, due_date, status, priority, owner_id } = req.body || {};
 
@@ -748,7 +754,7 @@ app.patch("/tasks/:id", authenticate, async (req, res) => {
   }
 });
 
-app.get("/renewals", authenticate, async (_req, res) => {
+api.get("/renewals", authenticate, async (_req, res) => {
   try {
     const db = getDb();
     const rows = await db
@@ -786,7 +792,7 @@ app.get("/renewals", authenticate, async (_req, res) => {
   }
 });
 
-app.get("/insurers", authenticate, async (_req, res) => {
+api.get("/insurers", authenticate, async (_req, res) => {
   try {
     const db = getDb();
     const rows = await db.collection("insurers").find({}).sort({ name: 1 }).toArray();
@@ -797,7 +803,7 @@ app.get("/insurers", authenticate, async (_req, res) => {
   }
 });
 
-app.post("/insurers", authenticate, async (req, res) => {
+api.post("/insurers", authenticate, async (req, res) => {
   const { name, country, lines, status, rating, annual_premium, active_policies, loss_ratio, contact, key_deals, last_review, notes } =
     req.body || {};
   if (!name) return res.status(400).json({ error: "Nombre requerido" });
@@ -834,6 +840,8 @@ app.post("/insurers", authenticate, async (req, res) => {
     res.status(500).json({ error: "No se pudo crear la aseguradora" });
   }
 });
+
+app.use("/api", api);
 
 app.use((err, _req, res, _next) => {
   console.error("[unhandled]", err);
