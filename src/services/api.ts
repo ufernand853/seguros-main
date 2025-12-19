@@ -10,11 +10,37 @@ type LoginResponse = {
 
 async function handleResponse(res: Response) {
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
+
+  const isHtml = text.trimStart().startsWith("<");
+
   if (!res.ok) {
-    const message = data?.error ?? "Error inesperado";
+    const message =
+      data?.error ??
+      (!text
+        ? `Error ${res.status}: ${res.statusText || "Error inesperado"}`
+        : isHtml
+          ? `El servidor devolvió HTML en vez de JSON (status ${res.status}). Verifica la URL del API (${API_BASE}) y que el backend esté disponible.`
+          : text);
     throw new Error(message);
   }
+
+  if (text && data === null) {
+    const preview = text.slice(0, 200);
+    const reason = isHtml
+      ? `El servidor devolvió HTML en vez de JSON válido. Verifica la URL del API (${API_BASE}) y que el backend responda en JSON.`
+      : `La respuesta del servidor no es JSON válido: ${preview}`;
+    throw new Error(reason);
+  }
+
   return data;
 }
 
