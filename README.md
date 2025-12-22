@@ -32,7 +32,7 @@ Proyecto prototipo visual “Gestión de seguros”
   - `PORT` → puerto del API (por defecto 4000).
   - `ACCESS_TTL_SECONDS` → segundos de vigencia del access token (por defecto 7200 = 2h).
   - `REFRESH_TTL_SECONDS` → segundos de vigencia del refresh token (por defecto 86400 = 24h).
-  - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `http://localhost:4000`).
+  - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `http://localhost:4000/api` o `/api`).
 
 - Puedes usar el archivo `.env.example` incluido en el repo y copiarlo como `.env` para comenzar rápido:
 
@@ -46,14 +46,14 @@ ACCESS_TTL_SECONDS=7200
 REFRESH_TTL_SECONDS=86400
 
 # Frontend
-VITE_API_URL=http://localhost:4000
+VITE_API_URL=http://localhost:4000/api
 ```
 - Provisionar la base de datos limpia (crea solo un usuario admin configurable por env):
   - `npm run seed:mongo`
 - Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
-- Configurar `VITE_API_URL` si se usa un host diferente.
-- Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4000/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta.
+- Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
+- Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4000/api/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta o usa `/api` para proxear al backend desde Vite.
 
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder
