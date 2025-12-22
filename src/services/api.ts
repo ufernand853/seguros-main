@@ -226,22 +226,11 @@ export type EmployeeItem = {
 export type Employee = EmployeeItem;
 
 export async function apiListEmployees(accessToken: string): Promise<{ items: EmployeeItem[] }> {
-  try {
-    return await request("/employees", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-  } catch (error) {
-    // Fallback demo data while the backend expone el endpoint real
-    return {
-      items: [
-        { id: "ops-1", name: "Equipo Siniestros", role: "operaciones", email: "siniestros@segurosdemo.com" },
-        { id: "ops-2", name: "Backoffice", role: "operaciones", email: "backoffice@segurosdemo.com" },
-        { id: "ops-3", name: "Productor", role: "comercial", email: "productor@segurosdemo.com" },
-      ],
-    };
-  }
+  return request("/employees", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
 }
 
 export type RenewalItem = {

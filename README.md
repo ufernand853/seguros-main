@@ -48,7 +48,7 @@ REFRESH_TTL_SECONDS=86400
 # Frontend
 VITE_API_URL=http://localhost:4000
 ```
-- Provisionar la base de datos con datos de demo:
+- Provisionar la base de datos limpia (crea solo un usuario admin configurable por env):
   - `npm run seed:mongo`
 - Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
