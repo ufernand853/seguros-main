@@ -54,7 +54,7 @@ export default function Clientes() {
 
   const nuevo = () => navigate("/clientes/nuevo");
   const verFicha = () => navigate("/clientes/ficha");
-  const verPolizasDemo = () => navigate("/clientes/polizas-demo");
+  const verPolizas = () => navigate("/clientes/polizas");
 
   return (
     <div className="flex-1 flex flex-col gap-4">
@@ -95,10 +95,10 @@ export default function Clientes() {
             </button>
             <button
               type="button"
-              onClick={verPolizasDemo}
+              onClick={verPolizas}
               className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
             >
-              Demo alta póliza & siniestro
+              Alta póliza & siniestro (base real)
             </button>
           </div>
         </div>
