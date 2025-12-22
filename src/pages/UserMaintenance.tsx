@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-const BASE_ROLES = [
-  "Administrador",
-  "Operaciones",
-  "Comercial",
-  "Siniestros",
-  "Productor",
-  "Finanzas",
-  "Auditoría",
-];
+const BASE_ROLES = ["Administrador", "Operaciones", "Consultas"];
 
 type UserStatus = "Activo" | "Suspendido" | "Invitación pendiente";
 
@@ -27,7 +19,7 @@ const INITIAL_USERS: UserRecord[] = [
     id: "usr-001",
     name: "María González",
     email: "maria.gonzalez@segurosdemo.com",
-    roles: ["Administrador", "Finanzas"],
+    roles: ["Administrador"],
     status: "Activo",
     lastAccess: "2024-10-12T11:20:00Z",
     team: "Backoffice",
@@ -36,7 +28,7 @@ const INITIAL_USERS: UserRecord[] = [
     id: "usr-002",
     name: "Javier Pereira",
     email: "javier.pereira@segurosdemo.com",
-    roles: ["Operaciones", "Siniestros"],
+    roles: ["Operaciones"],
     status: "Activo",
     lastAccess: "2024-10-15T08:45:00Z",
     team: "Siniestros",
@@ -45,7 +37,7 @@ const INITIAL_USERS: UserRecord[] = [
     id: "usr-003",
     name: "Lucía Cabrera",
     email: "lucia.cabrera@segurosdemo.com",
-    roles: ["Comercial", "Productor"],
+    roles: ["Consultas"],
     status: "Invitación pendiente",
     lastAccess: null,
     team: "Comercial",
@@ -73,21 +65,20 @@ export default function UserMaintenance() {
   const [inviteRole, setInviteRole] = useState(BASE_ROLES[0]);
   const [inviteTeam, setInviteTeam] = useState("");
   const [roleToAssign, setRoleToAssign] = useState(BASE_ROLES[0]);
-  const [customRoleInput, setCustomRoleInput] = useState("");
-  const [customRoles, setCustomRoles] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const inviteStatus: UserStatus = "Invitación pendiente";
 
   const roleOptions = useMemo(() => {
     const unique = new Map<string, string>();
-    [...BASE_ROLES, ...customRoles, ...users.flatMap((user) => user.roles)].forEach((role) => {
+    [...BASE_ROLES, ...users.flatMap((user) => user.roles)].forEach((role) => {
       const value = role.trim();
       if (!value) return;
       const key = value.toLowerCase();
       if (!unique.has(key)) unique.set(key, value);
     });
     return Array.from(unique.values()).sort((a, b) => a.localeCompare(b, "es"));
-  }, [customRoles, users]);
+  }, [users]);
 
   useEffect(() => {
     if (!roleOptions.includes(inviteRole) && roleOptions.length) {
@@ -117,6 +108,10 @@ export default function UserMaintenance() {
   }, [filtered, selectedId]);
 
   const selectedUser = filtered.find((user) => user.id === selectedId) ?? filtered[0];
+
+  useEffect(() => {
+    setSaveFeedback(null);
+  }, [selectedUser]);
 
   const stats = useMemo(() => {
     const totalRoles = new Set(users.flatMap((user) => user.roles)).size;
@@ -159,6 +154,11 @@ export default function UserMaintenance() {
     setUsers((prev) => prev.map((user) => (user.id === selectedUser.id ? { ...user, status } : user)));
   };
 
+  const handleApplyChanges = () => {
+    if (!selectedUser) return;
+    setSaveFeedback(`Cambios aplicados para ${selectedUser.name}.`);
+  };
+
   const handleSaveInvite = () => {
     setFormError(null);
     if (!inviteName.trim() || !inviteEmail.trim()) {
@@ -180,15 +180,6 @@ export default function UserMaintenance() {
     setInviteTeam("");
     setSelectedId(newUser.id);
     setShowInvite(false);
-  };
-
-  const handleAddCustomRole = () => {
-    const value = customRoleInput.trim();
-    if (!value) return;
-    const exists = roleOptions.some((role) => role.toLowerCase() === value.toLowerCase());
-    if (!exists) setCustomRoles((prev) => [...prev, value]);
-    setRoleToAssign(value);
-    setCustomRoleInput("");
   };
 
   return (
@@ -451,27 +442,6 @@ export default function UserMaintenance() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">Crear rol personalizado</label>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <input
-                        value={customRoleInput}
-                        onChange={(event) => setCustomRoleInput(event.target.value)}
-                        placeholder="Ej. Auditoría técnica"
-                        className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddCustomRole}
-                        className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        Agregar al catálogo
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      El rol personalizado queda disponible para todos los usuarios y se asigna automáticamente al rol seleccionado.
-                    </p>
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -489,14 +459,21 @@ export default function UserMaintenance() {
                   >
                     Suspender acceso
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => updateUserStatus(inviteStatus)}
-                    className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 sm:col-span-2"
-                  >
-                    Reenviar invitación
-                  </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyChanges}
+                  className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                >
+                  Aplicar cambios
+                </button>
+
+                {saveFeedback && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    {saveFeedback}
+                  </div>
+                )}
 
                 <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600">
                   Si cambias los roles, recuerda actualizar las políticas de permisos en el backend para que el cambio tenga efecto.
