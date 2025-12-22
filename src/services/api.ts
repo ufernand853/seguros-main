@@ -74,6 +74,34 @@ export async function apiRefresh(refreshToken: string): Promise<{ accessToken: s
   });
 }
 
+export type UserItem = {
+  id: string;
+  name: string;
+  email: string;
+  roles?: string[];
+  role?: string;
+  status?: "Activo" | "Suspendido";
+  lastAccess?: string | null;
+  team?: string | null;
+};
+
+export async function apiListUsers(accessToken: string): Promise<{ items: UserItem[] }> {
+  return request("/users", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiDeleteUser(userId: string, accessToken: string): Promise<{ ok: boolean }> {
+  return request(`/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export type CreateClientPayload = {
   name: string;
   document: string;

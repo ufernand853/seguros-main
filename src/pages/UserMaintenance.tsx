@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useAuth } from "../auth/AuthProvider";
+import { apiDeleteUser, apiListUsers, type UserItem } from "../services/api";
 
 const BASE_ROLES = ["Administrador", "Operaciones", "Consultas"];
 
@@ -14,51 +16,13 @@ type UserRecord = {
   team?: string;
 };
 
-const INITIAL_USERS: UserRecord[] = [
-  {
-    id: "usr-001",
-    name: "María González",
-    email: "maria.gonzalez@segurosdemo.com",
-    roles: ["Administrador"],
-    status: "Activo",
-    lastAccess: "2024-10-12T11:20:00Z",
-    team: "Backoffice",
-  },
-  {
-    id: "usr-002",
-    name: "Javier Pereira",
-    email: "javier.pereira@segurosdemo.com",
-    roles: ["Operaciones"],
-    status: "Activo",
-    lastAccess: "2024-10-15T08:45:00Z",
-    team: "Siniestros",
-  },
-  {
-    id: "usr-003",
-    name: "Lucía Cabrera",
-    email: "lucia.cabrera@segurosdemo.com",
-    roles: ["Consultas"],
-    status: "Activo",
-    lastAccess: null,
-    team: "Comercial",
-  },
-  {
-    id: "usr-004",
-    name: "Diego Hernández",
-    email: "diego.hernandez@segurosdemo.com",
-    roles: ["Operaciones"],
-    status: "Suspendido",
-    lastAccess: "2024-09-30T17:15:00Z",
-    team: "Operaciones",
-  },
-];
-
 export default function UserMaintenance() {
-  const [users, setUsers] = useState<UserRecord[]>(INITIAL_USERS);
+  const { token } = useAuth();
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("todos");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "todos">("todos");
-  const [selectedId, setSelectedId] = useState<string>(INITIAL_USERS[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -68,6 +32,44 @@ export default function UserMaintenance() {
   const [roleToAssign, setRoleToAssign] = useState(BASE_ROLES[0]);
   const [formError, setFormError] = useState<string | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const normalizeUser = useCallback((user: UserItem): UserRecord => {
+    const roles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : user.role ? [user.role] : [];
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      roles,
+      status: user.status === "Suspendido" ? "Suspendido" : "Activo",
+      lastAccess: user.lastAccess ?? null,
+      team: user.team ?? undefined,
+    };
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    if (!token) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiListUsers(token);
+      const normalized = response.items.map(normalizeUser);
+      setUsers(normalized);
+      setSelectedId((prev) => (normalized.some((item) => item.id === prev) ? prev : normalized[0]?.id ?? ""));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar los usuarios");
+      setUsers([]);
+      setSelectedId("");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [normalizeUser, token]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const roleOptions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -183,12 +185,25 @@ export default function UserMaintenance() {
     setShowCreate(false);
   };
 
-  const handleDeleteSelected = () => {
-    if (!selectedUser) return;
+  const handleDeleteSelected = async () => {
+    if (!selectedUser || !token) return;
     const confirmed = window.confirm(`¿Eliminar a ${selectedUser.name}? Esta acción no se puede deshacer.`);
     if (!confirmed) return;
-    setUsers((prev) => prev.filter((user) => user.id !== selectedUser.id));
     setSaveFeedback(null);
+    setError(null);
+
+    try {
+      await apiDeleteUser(selectedUser.id, token);
+      setUsers((prev) => {
+        const updated = prev.filter((user) => user.id !== selectedUser.id);
+        const nextSelected = updated.some((user) => user.id === selectedId) ? selectedId : updated[0]?.id ?? "";
+        setSelectedId(nextSelected);
+        return updated;
+      });
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar el usuario");
+    }
   };
 
   return (
@@ -270,6 +285,14 @@ export default function UserMaintenance() {
             </select>
           </div>
         </div>
+
+        {error && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
+        )}
+
+        {isLoading && !error && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">Cargando usuarios...</div>
+        )}
 
         {showCreate && (
           <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
