@@ -91,7 +91,7 @@ export default function Clientes() {
               onClick={verFicha}
               className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
             >
-              Ver ficha integral demo
+              Ver ficha integral
             </button>
             <button
               type="button"

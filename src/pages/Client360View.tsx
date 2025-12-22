@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
 const CLIENT_DATA = {
   nombre: "Alicia Demo",
@@ -28,14 +29,6 @@ const CLAIM_STAGES = [
   { etapa: "Inspección", fecha: "2024-03-03", detalle: "Inspección fotográfica enviada a la aseguradora" },
   { etapa: "Carta de cobertura", fecha: "2024-03-05", detalle: "Carta emitida y enviada al cliente" },
   { etapa: "Pago", fecha: "2024-03-12", detalle: "Pago de reparación autorizado" },
-];
-
-const CLAIM_CATEGORIES = [
-  "Automotor",
-  "Hogar",
-  "Vida",
-  "Accidentes personales",
-  "Responsabilidad civil",
 ];
 
 const INITIAL_CLAIM_REGISTRATIONS = [
@@ -69,12 +62,6 @@ const DOUBLE_COVERAGE = [
   },
 ];
 
-const TENANT_HISTORY = [
-  { periodo: "2021-2022", inquilino: "Diego Demo", estado: "Finalizado sin reclamos" },
-  { periodo: "2022-2023", inquilino: "Elena Demo", estado: "Finalizado con reintegro parcial" },
-  { periodo: "2023-Actual", inquilino: "Carla Demo", estado: "En curso" },
-];
-
 const INSURANCE_TYPES = [
   "Agro",
   "Viajero",
@@ -98,86 +85,29 @@ const EMISSION_REQUIREMENTS = {
 };
 
 export default function Client360View() {
-  const [insuranceSummary, setInsuranceSummary] = useState(INITIAL_INSURANCE_SUMMARY);
-  const [policyForm, setPolicyForm] = useState({
-    nombre: "",
-    compania: "",
-    inicio: "",
-    fin: "",
-  });
-  const [policySuccess, setPolicySuccess] = useState("");
+  const navigate = useNavigate();
+  const insuranceSummary = INITIAL_INSURANCE_SUMMARY;
+  const claimRegistrations = INITIAL_CLAIM_REGISTRATIONS;
 
-  const [claimForm, setClaimForm] = useState({
-    poliza: INITIAL_INSURANCE_SUMMARY[0]?.nombre ?? "",
-    categoria: CLAIM_CATEGORIES[0],
-    fecha: "",
-    descripcion: "",
-  });
-  const [claimRegistrations, setClaimRegistrations] = useState(INITIAL_CLAIM_REGISTRATIONS);
-  const [claimSuccess, setClaimSuccess] = useState("");
-
-  const availablePoliciesForClaims = useMemo(
-    () =>
-      insuranceSummary.map((policy) => ({
-        nombre: policy.nombre,
-        etiqueta: `${policy.nombre} · ${policy.compania}`,
-      })),
-    [insuranceSummary],
+  const actionCards = useMemo(
+    () => [
+      {
+        title: "Dar de alta póliza para el cliente",
+        description: "Deriva al flujo operativo para crear la póliza con datos reales y asignarla al cliente.",
+        button: "Ir al alta de pólizas",
+        onClick: () => navigate("/pipeline"),
+        badge: "Producción",
+      },
+      {
+        title: "Registrar siniestro",
+        description: "Abre el formulario real de denuncias para vincular el evento al cliente y su póliza vigente.",
+        button: "Ir al registro de siniestros",
+        onClick: () => navigate("/siniestros/registro"),
+        badge: "Siniestros",
+      },
+    ],
+    [navigate],
   );
-
-  const handlePolicySubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!policyForm.nombre || !policyForm.compania || !policyForm.inicio || !policyForm.fin) {
-      setPolicySuccess("Completa los datos obligatorios para generar la póliza.");
-      return;
-    }
-
-    setInsuranceSummary((current) => [
-      ...current,
-      {
-        nombre: policyForm.nombre,
-        compania: policyForm.compania,
-        estado: "En emisión",
-        vigencia: `Desde ${policyForm.inicio} al ${policyForm.fin}`,
-      },
-    ]);
-
-    setPolicySuccess(
-      `Póliza "${policyForm.nombre}" preparada para emisión y vinculada al cliente. Comparte la constancia con ${policyForm.compania}.`,
-    );
-
-    setPolicyForm({ nombre: "", compania: "", inicio: "", fin: "" });
-  };
-
-  const handleClaimSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!claimForm.poliza || !claimForm.fecha || !claimForm.descripcion) {
-      setClaimSuccess("Completa los datos obligatorios para registrar el siniestro.");
-      return;
-    }
-
-    setClaimRegistrations((current) => [
-      {
-        poliza: claimForm.poliza,
-        fecha: claimForm.fecha,
-        categoria: claimForm.categoria,
-        descripcion: claimForm.descripcion,
-        estado: "Denuncia ingresada",
-      },
-      ...current,
-    ]);
-
-    setClaimSuccess(
-      `Siniestro cargado para la póliza ${claimForm.poliza}. Inicia seguimiento con la aseguradora (${claimForm.categoria}).`,
-    );
-
-    setClaimForm((current) => ({
-      poliza: current.poliza,
-      categoria: current.categoria,
-      fecha: "",
-      descripcion: "",
-    }));
-  };
 
   return (
     <div className="flex-1 flex flex-col gap-6">
@@ -204,158 +134,24 @@ export default function Client360View() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-slate-800">Alta rápida de pólizas</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Usa este formulario de demostración para simular cómo capturamos los datos clave antes de enviar la solicitud a la
-            aseguradora.
-          </p>
-          <form className="mt-4 space-y-4" onSubmit={handlePolicySubmit}>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-name">
-                Producto asegurado
-              </label>
-              <input
-                id="policy-name"
-                type="text"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                placeholder="Ej: Seguro integral de comercio"
-                value={policyForm.nombre}
-                onChange={(event) => setPolicyForm((current) => ({ ...current, nombre: event.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-company">
-                Compañía
-              </label>
-              <input
-                id="policy-company"
-                type="text"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                placeholder="Ej: Sura, Mapfre, Porto"
-                value={policyForm.compania}
-                onChange={(event) => setPolicyForm((current) => ({ ...current, compania: event.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-start">
-                  Vigencia desde
-                </label>
-                <input
-                  id="policy-start"
-                  type="date"
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                  value={policyForm.inicio}
-                  onChange={(event) => setPolicyForm((current) => ({ ...current, inicio: event.target.value }))}
-                />
+        {actionCards.map((card) => (
+          <div key={card.title} className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 flex flex-col justify-between gap-4">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                {card.badge}
               </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-end">
-                  Vigencia hasta
-                </label>
-                <input
-                  id="policy-end"
-                  type="date"
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                  value={policyForm.fin}
-                  onChange={(event) => setPolicyForm((current) => ({ ...current, fin: event.target.value }))}
-                />
-              </div>
+              <h2 className="text-lg font-semibold text-slate-800">{card.title}</h2>
+              <p className="text-sm text-slate-600">{card.description}</p>
             </div>
             <button
-              type="submit"
+              type="button"
+              onClick={card.onClick}
               className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
             >
-              Generar póliza demo
+              {card.button}
             </button>
-            {policySuccess && (
-              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-                {policySuccess}
-              </p>
-            )}
-          </form>
-        </div>
-
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-slate-800">Registro express de siniestros</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Registra incidentes y deja asentada la denuncia para iniciar el circuito de seguimiento interno.
-          </p>
-          <form className="mt-4 space-y-4" onSubmit={handleClaimSubmit}>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="claim-policy">
-                Póliza asociada
-              </label>
-              <select
-                id="claim-policy"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                value={claimForm.poliza}
-                onChange={(event) => setClaimForm((current) => ({ ...current, poliza: event.target.value }))}
-              >
-                <option value="">Selecciona una póliza</option>
-                {availablePoliciesForClaims.map((policy) => (
-                  <option key={policy.nombre} value={policy.nombre}>
-                    {policy.etiqueta}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="claim-category">
-                  Tipo de siniestro
-                </label>
-                <select
-                  id="claim-category"
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                  value={claimForm.categoria}
-                  onChange={(event) => setClaimForm((current) => ({ ...current, categoria: event.target.value }))}
-                >
-                  {CLAIM_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="claim-date">
-                  Fecha del evento
-                </label>
-                <input
-                  id="claim-date"
-                  type="date"
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                  value={claimForm.fecha}
-                  onChange={(event) => setClaimForm((current) => ({ ...current, fecha: event.target.value }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="claim-description">
-                Descripción breve
-              </label>
-              <textarea
-                id="claim-description"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
-                rows={3}
-                placeholder="Ej: Choque con tercero en Av. Italia, sin lesionados"
-                value={claimForm.descripcion}
-                onChange={(event) => setClaimForm((current) => ({ ...current, descripcion: event.target.value }))}
-              />
-            </div>
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
-            >
-              Registrar siniestro demo
-            </button>
-            {claimSuccess && (
-              <p className="text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">{claimSuccess}</p>
-            )}
-          </form>
-        </div>
+          </div>
+        ))}
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -486,28 +282,6 @@ export default function Client360View() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-slate-800">Históricos de inquilinos</h2>
-          <table className="mt-4 w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="py-2 text-left">Período</th>
-                <th className="py-2 text-left">Inquilino</th>
-                <th className="py-2 text-left">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {TENANT_HISTORY.map((row) => (
-                <tr key={`${row.periodo}-${row.inquilino}`}>
-                  <td className="py-2 text-slate-700">{row.periodo}</td>
-                  <td className="py-2 text-slate-700">{row.inquilino}</td>
-                  <td className="py-2 text-slate-600">{row.estado}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 flex flex-col">
           <h2 className="text-lg font-semibold text-slate-800">Tipos de seguros ofrecidos</h2>
           <p className="mt-1 text-sm text-slate-600">
