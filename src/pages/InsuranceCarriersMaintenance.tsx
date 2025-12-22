@@ -1,6 +1,12 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
-import { apiCreateInsurer, apiListInsurers, type CreateInsurerPayload, type InsurerListItem } from "../services/api";
+import {
+  apiCreateInsurer,
+  apiListInsurers,
+  apiUpdateInsurer,
+  type CreateInsurerPayload,
+  type InsurerListItem,
+} from "../services/api";
 
 type Contact = {
   nombre: string;
@@ -64,6 +70,35 @@ function mapApiInsurerToCarrier(insurer: InsurerListItem): Carrier {
   };
 }
 
+function buildInsurerPayload(carrier: Carrier) {
+  const ramosLimpios = carrier.ramos
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value, index, array) => array.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index);
+  const acuerdosLimpios = carrier.acuerdosClaves.map((value) => value.trim()).filter(Boolean);
+
+  const payload: CreateInsurerPayload = {
+    name: carrier.nombre.trim(),
+    country: carrier.pais.trim(),
+    lines: ramosLimpios,
+    status: carrier.estado,
+    rating: Number.isFinite(carrier.calificacion) ? Number(carrier.calificacion) : 0,
+    annual_premium: Number.isFinite(carrier.primasAnuales) ? Number(carrier.primasAnuales) : 0,
+    active_policies: Number.isFinite(carrier.polizasVigentes) ? Number(carrier.polizasVigentes) : 0,
+    loss_ratio: Number.isFinite(carrier.siniestralidad) ? Number(carrier.siniestralidad) : 0,
+    contact: {
+      name: carrier.contacto.nombre?.trim() || null,
+      email: carrier.contacto.email?.trim() || null,
+      phone: carrier.contacto.telefono?.trim() || null,
+    },
+    key_deals: acuerdosLimpios,
+    last_review: carrier.ultimaActualizacion || null,
+    notes: carrier.notas?.trim() || null,
+  };
+
+  return { payload, ramos: ramosLimpios };
+}
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-UY", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 
@@ -80,6 +115,7 @@ export default function InsuranceCarriersMaintenance() {
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setLoading] = useState(false);
   const [isSaving, setSaving] = useState(false);
+  const [isUpdating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customRamos, setCustomRamos] = useState<string[]>([]);
   const [newRamoOption, setNewRamoOption] = useState("");
@@ -98,6 +134,8 @@ export default function InsuranceCarriersMaintenance() {
     ultimaActualizacion: new Date().toISOString().slice(0, 10),
     notas: "",
   });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedCarrier, setEditedCarrier] = useState<Carrier | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -163,6 +201,12 @@ export default function InsuranceCarriersMaintenance() {
     }
   }, [filtered, selectedId]);
 
+  useEffect(() => {
+    setIsEditing(false);
+    setEditedCarrier(null);
+    setUpdating(false);
+  }, [selectedId]);
+
   const selectedCarrier = filtered.find((item) => item.id === selectedId) ?? filtered[0];
 
   const handleAddRamoOption = () => {
@@ -212,14 +256,10 @@ export default function InsuranceCarriersMaintenance() {
     };
   }, [filtered]);
 
-  const handleSubmit = async () => {
-    const ramosLimpios = newCarrier.ramos
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .filter((value, index, array) => array.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index);
-    const acuerdosLimpios = newCarrier.acuerdosClaves.map((value) => value.trim()).filter(Boolean);
+  const handleCreate = async () => {
+    const { payload, ramos } = buildInsurerPayload(newCarrier);
 
-    if (!newCarrier.nombre.trim() || !newCarrier.pais.trim() || ramosLimpios.length === 0) {
+    if (!newCarrier.nombre.trim() || !newCarrier.pais.trim() || ramos.length === 0) {
       setError("Nombre, país y al menos un ramo son obligatorios");
       return;
     }
@@ -228,25 +268,6 @@ export default function InsuranceCarriersMaintenance() {
       setError("Debes iniciar sesión para crear aseguradoras");
       return;
     }
-
-    const payload: CreateInsurerPayload = {
-      name: newCarrier.nombre.trim(),
-      country: newCarrier.pais.trim(),
-      lines: ramosLimpios,
-      status: newCarrier.estado,
-      rating: Number.isFinite(newCarrier.calificacion) ? Number(newCarrier.calificacion) : 0,
-      annual_premium: Number.isFinite(newCarrier.primasAnuales) ? Number(newCarrier.primasAnuales) : 0,
-      active_policies: Number.isFinite(newCarrier.polizasVigentes) ? Number(newCarrier.polizasVigentes) : 0,
-      loss_ratio: Number.isFinite(newCarrier.siniestralidad) ? Number(newCarrier.siniestralidad) : 0,
-      contact: {
-        name: newCarrier.contacto.nombre?.trim() || null,
-        email: newCarrier.contacto.email?.trim() || null,
-        phone: newCarrier.contacto.telefono?.trim() || null,
-      },
-      key_deals: acuerdosLimpios,
-      last_review: newCarrier.ultimaActualizacion || null,
-      notes: newCarrier.notas?.trim() || null,
-    };
 
     setSaving(true);
     setError(null);
@@ -271,6 +292,67 @@ export default function InsuranceCarriersMaintenance() {
       setError(err instanceof Error ? err.message : "No se pudo guardar la aseguradora");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleStartEditing = () => {
+    if (!selectedCarrier) return;
+    setShowForm(false);
+    setError(null);
+    setEditedCarrier({
+      ...selectedCarrier,
+      ramos: [...selectedCarrier.ramos],
+      acuerdosClaves: [...selectedCarrier.acuerdosClaves],
+      contacto: { ...selectedCarrier.contacto },
+      ultimaActualizacion: selectedCarrier.ultimaActualizacion?.slice(0, 10) ?? "",
+    });
+    setIsEditing(true);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+    setEditedCarrier(null);
+    setUpdating(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editedCarrier) return;
+    const { payload, ramos } = buildInsurerPayload(editedCarrier);
+
+    if (!editedCarrier.nombre.trim() || !editedCarrier.pais.trim() || ramos.length === 0) {
+      setError("Nombre, país y al menos un ramo son obligatorios");
+      return;
+    }
+
+    if (!token) {
+      setError("Debes iniciar sesión para editar aseguradoras");
+      return;
+    }
+
+    const insurerId = editedCarrier.id || selectedCarrier?.id;
+    if (!insurerId) {
+      setError("No se pudo determinar la aseguradora a editar");
+      return;
+    }
+
+    setUpdating(true);
+    setError(null);
+
+    try {
+      const updated = await apiUpdateInsurer(insurerId, payload, token);
+      const mapped = mapApiInsurerToCarrier(updated);
+      setCarriers((prev) =>
+        [...prev.map((item) => (item.id === mapped.id ? mapped : item))].sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, "es"),
+        ),
+      );
+      setSelectedId(mapped.id);
+      setIsEditing(false);
+      setEditedCarrier(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar la aseguradora");
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -550,7 +632,7 @@ export default function InsuranceCarriersMaintenance() {
           <div className="mt-4 flex flex-wrap gap-3 items-center">
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={handleCreate}
               disabled={isSaving}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
             >
@@ -683,68 +765,290 @@ export default function InsuranceCarriersMaintenance() {
         <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 flex flex-col min-h-0">
           <h2 className="text-lg font-semibold text-slate-900">Detalle de la aseguradora</h2>
           {selectedCarrier ? (
-            <div className="mt-4 space-y-5 text-sm text-slate-700">
-              <div>
-                <div className="text-xl font-bold text-slate-900">{selectedCarrier.nombre}</div>
-                <div className="text-xs uppercase tracking-wide text-slate-500">{selectedCarrier.id}</div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {selectedCarrier.ramos.map((ramoName) => (
-                  <span
-                    key={ramoName}
-                    className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600"
-                  >
-                    {ramoName}
-                  </span>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <DetailItem label="País" value={selectedCarrier.pais} />
-                <DetailItem label="Estado" value={<EstadoPill value={selectedCarrier.estado} />} />
-                <DetailItem label="Calificación" value={`${selectedCarrier.calificacion.toFixed(1)} / 5`} />
-                <DetailItem label="Primas" value={formatCurrency(selectedCarrier.primasAnuales)} />
-                <DetailItem label="Pólizas" value={selectedCarrier.polizasVigentes.toLocaleString("es-UY")} />
-                <DetailItem label="Siniestralidad" value={`${selectedCarrier.siniestralidad}%`} />
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Responsable comercial</h3>
-                <p className="mt-1 text-slate-700">{selectedCarrier.contacto.nombre}</p>
-                <p className="text-slate-500 text-xs">{selectedCarrier.contacto.email}</p>
-                <p className="text-slate-500 text-xs">{selectedCarrier.contacto.telefono}</p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Acuerdos vigentes</h3>
-                <ul className="mt-2 list-disc pl-5 space-y-1">
-                  {selectedCarrier.acuerdosClaves.map((item) => (
-                    <li key={item} className="text-slate-700">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {selectedCarrier.notas && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Notas internas</h3>
-                  <p className="mt-1 text-slate-600 whitespace-pre-line">{selectedCarrier.notas}</p>
+            isEditing && editedCarrier ? (
+              <div className="mt-4 space-y-5 text-sm text-slate-700">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nombre comercial</span>
+                    <input
+                      value={editedCarrier.nombre}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) => (prev ? { ...prev, nombre: event.target.value } : prev))
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">País</span>
+                    <input
+                      value={editedCarrier.pais}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) => (prev ? { ...prev, pais: event.target.value } : prev))
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Estado</span>
+                    <select
+                      value={editedCarrier.estado}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, estado: event.target.value as Carrier["estado"] } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    >
+                      {ESTADOS.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Última actualización</span>
+                    <input
+                      type="date"
+                      value={editedCarrier.ultimaActualizacion?.slice(0, 10) ?? ""}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, ultimaActualizacion: event.target.value || null } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 sm:col-span-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Ramos (selección múltiple)
+                    </span>
+                    <select
+                      multiple
+                      value={editedCarrier.ramos}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev
+                            ? { ...prev, ramos: Array.from(event.target.selectedOptions).map((option) => option.value) }
+                            : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 min-h-[120px]"
+                    >
+                      {ramoOptions.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Calificación</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      value={editedCarrier.calificacion}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, calificacion: Number(event.target.value) } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primas anuales (USD)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editedCarrier.primasAnuales}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, primasAnuales: Number(event.target.value) } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pólizas vigentes</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editedCarrier.polizasVigentes}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, polizasVigentes: Number(event.target.value) } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Siniestralidad (%)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={editedCarrier.siniestralidad}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, siniestralidad: Number(event.target.value) } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Responsable comercial</span>
+                    <input
+                      value={editedCarrier.contacto.nombre}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, contacto: { ...prev.contacto, nombre: event.target.value } } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span>
+                    <input
+                      type="email"
+                      value={editedCarrier.contacto.email}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, contacto: { ...prev.contacto, email: event.target.value } } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Teléfono</span>
+                    <input
+                      value={editedCarrier.contacto.telefono}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev ? { ...prev, contacto: { ...prev.contacto, telefono: event.target.value } } : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 sm:col-span-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Acuerdos clave (separados por coma)
+                    </span>
+                    <input
+                      value={editedCarrier.acuerdosClaves.join(", ")}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) =>
+                          prev
+                            ? { ...prev, acuerdosClaves: event.target.value.split(",").map((item) => item.trim()) }
+                            : prev,
+                        )
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 sm:col-span-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas internas</span>
+                    <textarea
+                      value={editedCarrier.notas ?? ""}
+                      onChange={(event) =>
+                        setEditedCarrier((prev) => (prev ? { ...prev, notas: event.target.value } : prev))
+                      }
+                      className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
                 </div>
-              )}
 
-              <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500">
-                Última actualización: {formatDate(selectedCarrier.ultimaActualizacion)}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleUpdate}
+                    disabled={isUpdating}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isUpdating ? "Guardando..." : "Guardar cambios"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditing}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div className="mt-4 space-y-5 text-sm text-slate-700">
+                <div>
+                  <div className="text-xl font-bold text-slate-900">{selectedCarrier.nombre}</div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">{selectedCarrier.id}</div>
+                </div>
 
-              <button
-                type="button"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-              >
-                Editar información
-              </button>
-            </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedCarrier.ramos.map((ramoName) => (
+                    <span
+                      key={ramoName}
+                      className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600"
+                    >
+                      {ramoName}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <DetailItem label="País" value={selectedCarrier.pais} />
+                  <DetailItem label="Estado" value={<EstadoPill value={selectedCarrier.estado} />} />
+                  <DetailItem label="Calificación" value={`${selectedCarrier.calificacion.toFixed(1)} / 5`} />
+                  <DetailItem label="Primas" value={formatCurrency(selectedCarrier.primasAnuales)} />
+                  <DetailItem label="Pólizas" value={selectedCarrier.polizasVigentes.toLocaleString("es-UY")} />
+                  <DetailItem label="Siniestralidad" value={`${selectedCarrier.siniestralidad}%`} />
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Responsable comercial</h3>
+                  <p className="mt-1 text-slate-700">{selectedCarrier.contacto.nombre}</p>
+                  <p className="text-slate-500 text-xs">{selectedCarrier.contacto.email}</p>
+                  <p className="text-slate-500 text-xs">{selectedCarrier.contacto.telefono}</p>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Acuerdos vigentes</h3>
+                  <ul className="mt-2 list-disc pl-5 space-y-1">
+                    {selectedCarrier.acuerdosClaves.map((item) => (
+                      <li key={item} className="text-slate-700">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {selectedCarrier.notas && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900">Notas internas</h3>
+                    <p className="mt-1 text-slate-600 whitespace-pre-line">{selectedCarrier.notas}</p>
+                  </div>
+                )}
+
+                <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500">
+                  Última actualización: {formatDate(selectedCarrier.ultimaActualizacion)}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleStartEditing}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                >
+                  Editar información
+                </button>
+              </div>
+            )
           ) : (
             <div className="mt-8 text-sm text-slate-500">Selecciona una aseguradora para ver sus detalles.</div>
           )}
