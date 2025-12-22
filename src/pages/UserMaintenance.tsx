@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const BASE_ROLES = ["Administrador", "Operaciones", "Consultas"];
 
-type UserStatus = "Activo" | "Suspendido" | "Invitación pendiente";
+type UserStatus = "Activo" | "Suspendido";
 
 type UserRecord = {
   id: string;
@@ -38,7 +38,7 @@ const INITIAL_USERS: UserRecord[] = [
     name: "Lucía Cabrera",
     email: "lucia.cabrera@segurosdemo.com",
     roles: ["Consultas"],
-    status: "Invitación pendiente",
+    status: "Activo",
     lastAccess: null,
     team: "Comercial",
   },
@@ -59,15 +59,15 @@ export default function UserMaintenance() {
   const [roleFilter, setRoleFilter] = useState<string>("todos");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "todos">("todos");
   const [selectedId, setSelectedId] = useState<string>(INITIAL_USERS[0]?.id ?? "");
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteName, setInviteName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState(BASE_ROLES[0]);
-  const [inviteTeam, setInviteTeam] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState(BASE_ROLES[0]);
+  const [newTeam, setNewTeam] = useState("");
+  const [newStatus, setNewStatus] = useState<UserStatus>("Activo");
   const [roleToAssign, setRoleToAssign] = useState(BASE_ROLES[0]);
   const [formError, setFormError] = useState<string | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
-  const inviteStatus: UserStatus = "Invitación pendiente";
 
   const roleOptions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -81,10 +81,10 @@ export default function UserMaintenance() {
   }, [users]);
 
   useEffect(() => {
-    if (!roleOptions.includes(inviteRole) && roleOptions.length) {
-      setInviteRole(roleOptions[0]);
+    if (!roleOptions.includes(newRole) && roleOptions.length) {
+      setNewRole(roleOptions[0]);
     }
-  }, [inviteRole, roleOptions]);
+  }, [newRole, roleOptions]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -116,9 +116,9 @@ export default function UserMaintenance() {
   const stats = useMemo(() => {
     const totalRoles = new Set(users.flatMap((user) => user.roles)).size;
     const actives = users.filter((user) => user.status === "Activo").length;
-    const pending = users.filter((user) => user.status === "Invitación pendiente").length;
     const suspended = users.filter((user) => user.status === "Suspendido").length;
-    return { totalRoles, actives, pending, suspended };
+    const totalUsers = users.length;
+    return { totalRoles, actives, suspended, totalUsers };
   }, [users]);
 
   const formatDate = (value?: string | null) => {
@@ -159,27 +159,36 @@ export default function UserMaintenance() {
     setSaveFeedback(`Cambios aplicados para ${selectedUser.name}.`);
   };
 
-  const handleSaveInvite = () => {
+  const handleCreateUser = () => {
     setFormError(null);
-    if (!inviteName.trim() || !inviteEmail.trim()) {
+    if (!newName.trim() || !newEmail.trim()) {
       setFormError("Nombre y email son obligatorios");
       return;
     }
     const newUser: UserRecord = {
       id: `usr-${Date.now()}`,
-      name: inviteName.trim(),
-      email: inviteEmail.trim(),
-      roles: [inviteRole],
-      status: inviteStatus,
+      name: newName.trim(),
+      email: newEmail.trim(),
+      roles: [newRole],
+      status: newStatus,
       lastAccess: null,
-      team: inviteTeam.trim() || undefined,
+      team: newTeam.trim() || undefined,
     };
     setUsers((prev) => [...prev, newUser].sort((a, b) => a.name.localeCompare(b.name, "es")));
-    setInviteName("");
-    setInviteEmail("");
-    setInviteTeam("");
+    setNewName("");
+    setNewEmail("");
+    setNewTeam("");
+    setNewStatus("Activo");
     setSelectedId(newUser.id);
-    setShowInvite(false);
+    setShowCreate(false);
+  };
+
+  const handleDeleteSelected = () => {
+    if (!selectedUser) return;
+    const confirmed = window.confirm(`¿Eliminar a ${selectedUser.name}? Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
+    setUsers((prev) => prev.filter((user) => user.id !== selectedUser.id));
+    setSaveFeedback(null);
   };
 
   return (
@@ -190,24 +199,24 @@ export default function UserMaintenance() {
             <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Configuración</p>
             <h1 className="text-2xl font-bold text-slate-900">Mantenimiento de usuarios y roles</h1>
             <p className="mt-2 text-slate-600 max-w-2xl">
-              Gestiona los accesos del equipo, asigna roles y controla el estado de las cuentas. Todos los cambios se
-              aplican en tiempo real para la sesión actual.
+              Gestiona los accesos del equipo, asigna roles y controla el estado de las cuentas. Puedes crear y eliminar
+              usuarios rápidamente y aplicar cambios en tiempo real para la sesión actual.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setShowInvite((prev) => !prev)}
+            onClick={() => setShowCreate((prev) => !prev)}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-100"
           >
             <span className="text-lg">＋</span>
-            {showInvite ? "Cerrar formulario" : "Invitar usuario"}
+            {showCreate ? "Cerrar formulario" : "Nuevo usuario"}
           </button>
         </div>
 
         <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ResumenCard title="Usuarios activos" value={stats.actives.toString()} subtitle="Con acceso vigente" />
-          <ResumenCard title="Invitaciones pendientes" value={stats.pending.toString()} subtitle="En espera de registro" />
-          <ResumenCard title="Suspendidos" value={stats.suspended.toString()} subtitle="No pueden ingresar" />
+          <ResumenCard title="Usuarios suspendidos" value={stats.suspended.toString()} subtitle="No pueden ingresar" />
+          <ResumenCard title="Usuarios totales" value={stats.totalUsers.toString()} subtitle="Incluye activos y suspendidos" />
           <ResumenCard title="Roles vigentes" value={stats.totalRoles.toString()} subtitle="Catálogo de permisos" />
         </dl>
       </header>
@@ -258,21 +267,20 @@ export default function UserMaintenance() {
               <option value="todos">Todos</option>
               <option value="Activo">Activo</option>
               <option value="Suspendido">Suspendido</option>
-              <option value="Invitación pendiente">Invitación pendiente</option>
             </select>
           </div>
         </div>
 
-        {showInvite && (
+        {showCreate && (
           <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
-            <h2 className="text-sm font-semibold text-indigo-700">Invitar nuevo usuario</h2>
-            <p className="text-xs text-indigo-600 mb-3">Se enviará un correo con los pasos para activar la cuenta.</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <h2 className="text-sm font-semibold text-indigo-700">Crear usuario</h2>
+            <p className="text-xs text-indigo-600 mb-3">Agrega cuentas nuevas con rol inicial y estado de acceso.</p>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <label className="flex flex-col text-sm text-slate-700 gap-1">
                 Nombre y apellido
                 <input
-                  value={inviteName}
-                  onChange={(event) => setInviteName(event.target.value)}
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
                   className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   placeholder="Ej. Ana Rodríguez"
                 />
@@ -281,17 +289,17 @@ export default function UserMaintenance() {
                 Email corporativo
                 <input
                   type="email"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
+                  value={newEmail}
+                  onChange={(event) => setNewEmail(event.target.value)}
                   className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   placeholder="usuario@segurosdemo.com"
                 />
               </label>
               <label className="flex flex-col text-sm text-slate-700 gap-1">
-                Rol inicial
+                Rol
                 <select
-                  value={inviteRole}
-                  onChange={(event) => setInviteRole(event.target.value)}
+                  value={newRole}
+                  onChange={(event) => setNewRole(event.target.value)}
                   className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 >
                   {roleOptions.map((role) => (
@@ -301,11 +309,22 @@ export default function UserMaintenance() {
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col text-sm text-slate-700 gap-1 md:col-span-3">
+              <label className="flex flex-col text-sm text-slate-700 gap-1">
+                Estado
+                <select
+                  value={newStatus}
+                  onChange={(event) => setNewStatus(event.target.value as UserStatus)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                >
+                  <option value="Activo">Activo</option>
+                  <option value="Suspendido">Suspendido</option>
+                </select>
+              </label>
+              <label className="flex flex-col text-sm text-slate-700 gap-1 md:col-span-4">
                 Equipo / Sector (opcional)
                 <input
-                  value={inviteTeam}
-                  onChange={(event) => setInviteTeam(event.target.value)}
+                  value={newTeam}
+                  onChange={(event) => setNewTeam(event.target.value)}
                   className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   placeholder="Backoffice, Comercial, Siniestros"
                 />
@@ -321,12 +340,11 @@ export default function UserMaintenance() {
             <div className="mt-4 flex flex-wrap gap-3 items-center">
               <button
                 type="button"
-                onClick={handleSaveInvite}
+                onClick={handleCreateUser}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
               >
-                Enviar invitación
+                Crear usuario
               </button>
-              <span className="text-xs text-slate-500">La cuenta quedará como "Invitación pendiente" hasta que se active.</span>
             </div>
           </div>
         )}
@@ -463,6 +481,14 @@ export default function UserMaintenance() {
 
                 <button
                   type="button"
+                  onClick={handleDeleteSelected}
+                  className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm hover:bg-rose-50"
+                >
+                  Eliminar usuario
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleApplyChanges}
                   className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
                 >
@@ -511,7 +537,6 @@ function StatusBadge({ status }: StatusBadgeProps) {
   const config: Record<UserStatus, { bg: string; text: string }> = {
     Activo: { bg: "bg-emerald-100", text: "text-emerald-700" },
     Suspendido: { bg: "bg-rose-100", text: "text-rose-700" },
-    "Invitación pendiente": { bg: "bg-amber-100", text: "text-amber-700" },
   };
 
   return (
