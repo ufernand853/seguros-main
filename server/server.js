@@ -214,6 +214,36 @@ api.post("/auth/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
+api.get("/users", authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db
+      .collection("users")
+      .find({}, { projection: { _id: 1, name: 1, email: 1, role: 1, roles: 1, status: 1, last_access: 1, team: 1 } })
+      .sort({ name: 1 })
+      .toArray();
+
+    const items = rows.map((user) => {
+      const roles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : user.role ? [user.role] : [];
+      const status = user.status === "Suspendido" ? "Suspendido" : "Activo";
+      return {
+        id: String(user._id),
+        name: user.name,
+        email: user.email,
+        roles,
+        status,
+        lastAccess: user.last_access ? new Date(user.last_access).toISOString() : null,
+        team: user.team ?? null,
+      };
+    });
+
+    res.json({ items });
+  } catch (err) {
+    console.error("[users list]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los usuarios" });
+  }
+});
+
 api.get("/clients", authenticate, async (_req, res) => {
   try {
     const db = getDb();
@@ -839,6 +869,22 @@ api.delete("/tasks/:id", authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[tasks delete]", err);
     res.status(500).json({ error: "No se pudo eliminar la tarea" });
+  }
+});
+
+api.delete("/users/:id", authenticate, requireAdmin, async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("users").findOneAndDelete({ _id: userId });
+    if (!deleted?.value) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    await db.collection("refresh_tokens").deleteMany({ user_id: userId });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[users delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el usuario" });
   }
 });
 
