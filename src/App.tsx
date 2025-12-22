@@ -13,7 +13,6 @@ import PolicyRenewals from "./pages/PolicyRenewals";
 import TaskTracker from "./pages/TaskTracker";
 import Client360View from "./pages/Client360View";
 import InsuranceCarriersMaintenance from "./pages/InsuranceCarriersMaintenance";
-import ClientesPolizasDemo from "./pages/ClientesPolizasDemo";
 import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
@@ -43,7 +42,7 @@ export default function App() {
       <Route path="/clientes/:id" element={withLayout(<ClientDetail />)} />
       <Route path="/clientes/nuevo" element={withLayout(<NuevoCliente />)} />
       <Route path="/clientes/ficha" element={withLayout(<Client360View />)} />
-      <Route path="/clientes/polizas-demo" element={withLayout(<ClientesPolizasDemo />)} />
+      <Route path="/clientes/polizas" element={withLayout(<ClaimRegistration />)} />
       <Route path="/siniestros/registro" element={withLayout(<ClaimRegistration />)} />
       <Route path="/configuracion" element={withLayout(<UserMaintenance />)} />
 
