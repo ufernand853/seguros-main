@@ -313,6 +313,21 @@ export async function apiCreateInsurer(payload: CreateInsurerPayload, accessToke
   });
 }
 
+export async function apiUpdateInsurer(
+  insurerId: string,
+  payload: CreateInsurerPayload,
+  accessToken: string,
+): Promise<InsurerListItem> {
+  return request(`/insurers/${insurerId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export type ClaimItem = {
   id: string;
   client_id: string;
