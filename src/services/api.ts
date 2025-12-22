@@ -1,5 +1,5 @@
-const DEFAULT_API_BASE = "http://179.27.98.202:4000";
-const API_BASE = import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE;
+const DEFAULT_API_BASE = "/api";
+const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE).replace(/\/$/, "");
 
 type LoginResponse = {
   user: { id: string; name: string; email: string; role?: string };
@@ -51,7 +51,7 @@ async function request(path: string, options: RequestInit) {
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(
-        `No se pudo conectar con el API en ${API_BASE}. Verifica que el backend esté en marcha y que la variable VITE_API_URL apunte a la URL correcta (p. ej. ${DEFAULT_API_BASE} para http://179.27.98.202:5173/login).`,
+        `No se pudo conectar con el API en ${API_BASE}. Verifica que el backend esté en marcha y que la variable VITE_API_URL apunte a la URL correcta (p. ej. http://localhost:4000/api o simplemente /api).`,
       );
     }
     throw error;
