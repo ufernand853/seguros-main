@@ -6,8 +6,8 @@ import { apiLogin } from "../services/api";
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState("ejecutivo@segurosdemo.com");
-  const [password, setPassword] = useState("Demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
 
@@ -80,9 +80,6 @@ export default function Login() {
             {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
           </button>
         </form>
-        <p className="text-xs text-slate-500 text-center mt-6">
-          Demo: ejecutivo@segurosdemo.com / Demo1234 o operaciones@segurosdemo.com / Operaciones!
-        </p>
       </div>
     </div>
   );
