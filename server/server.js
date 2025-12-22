@@ -139,6 +139,11 @@ async function authenticate(req, res, next) {
   }
 }
 
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "admin") return res.status(403).json({ error: "Solo administradores pueden realizar esta acción" });
+  return next();
+}
+
 const api = express.Router();
 
 // Compatibilidad: redirige /health a /api/health (si algún monitoreo antiguo lo usa)
@@ -407,6 +412,19 @@ api.post("/claims", authenticate, async (req, res) => {
   }
 });
 
+api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
+  const claimId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("claims").findOneAndDelete({ _id: claimId });
+    if (!deleted?.value) return res.status(404).json({ error: "Siniestro no encontrado" });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[claims delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el siniestro" });
+  }
+});
+
 api.post("/clients", authenticate, async (req, res) => {
   const { name, document, city, contacts, policies } = req.body || {};
   if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
@@ -532,6 +550,50 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
   }
 });
 
+api.delete("/clients/:id", authenticate, requireAdmin, async (req, res) => {
+  const clientId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("clients").findOneAndDelete({ _id: clientId });
+    if (!deleted?.value) return res.status(404).json({ error: "Cliente no encontrado" });
+
+    await Promise.all([
+      db.collection("tasks").deleteMany({ client_id: clientId }),
+      db.collection("pipeline").deleteMany({ client_id: clientId }),
+      db.collection("renewals").deleteMany({ client_id: clientId }),
+      db.collection("claims").deleteMany({ client_id: clientId }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[clients delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el cliente" });
+  }
+});
+
+api.delete("/clients/:clientId/policies/:policyId", authenticate, requireAdmin, async (req, res) => {
+  const { clientId, policyId } = req.params;
+  try {
+    const db = getDb();
+    const updated = await db
+      .collection("clients")
+      .findOneAndUpdate(
+        { _id: clientId, "policies.id": policyId },
+        { $pull: { policies: { id: policyId } } },
+        { returnDocument: "after" },
+      );
+
+    if (!updated?.value) return res.status(404).json({ error: "Póliza no encontrada para el cliente" });
+
+    await db.collection("claims").deleteMany({ client_id: clientId, policy_id: policyId });
+
+    res.json({ client: mapDocument(updated.value) });
+  } catch (err) {
+    console.error("[policies delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la póliza" });
+  }
+});
+
 api.get("/pipeline", authenticate, async (_req, res) => {
   try {
     const db = getDb();
@@ -568,6 +630,19 @@ api.get("/pipeline", authenticate, async (_req, res) => {
   } catch (err) {
     console.error("[pipeline]", err);
     res.status(500).json({ error: "No se pudo recuperar el pipeline" });
+  }
+});
+
+api.delete("/pipeline/:id", authenticate, requireAdmin, async (req, res) => {
+  const pipelineId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("pipeline").findOneAndDelete({ _id: pipelineId });
+    if (!deleted?.value) return res.status(404).json({ error: "Oportunidad no encontrada" });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[pipeline delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la oportunidad" });
   }
 });
 
@@ -754,6 +829,19 @@ api.patch("/tasks/:id", authenticate, async (req, res) => {
   }
 });
 
+api.delete("/tasks/:id", authenticate, requireAdmin, async (req, res) => {
+  const taskId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("tasks").findOneAndDelete({ _id: taskId });
+    if (!deleted?.value) return res.status(404).json({ error: "Tarea no encontrada" });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[tasks delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la tarea" });
+  }
+});
+
 api.get("/renewals", authenticate, async (_req, res) => {
   try {
     const db = getDb();
@@ -789,6 +877,19 @@ api.get("/renewals", authenticate, async (_req, res) => {
   } catch (err) {
     console.error("[renewals]", err);
     res.status(500).json({ error: "No se pudieron recuperar las renovaciones" });
+  }
+});
+
+api.delete("/renewals/:id", authenticate, requireAdmin, async (req, res) => {
+  const renewalId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("renewals").findOneAndDelete({ _id: renewalId });
+    if (!deleted?.value) return res.status(404).json({ error: "Renovación no encontrada" });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[renewals delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la renovación" });
   }
 });
 
@@ -838,6 +939,29 @@ api.post("/insurers", authenticate, async (req, res) => {
   } catch (err) {
     console.error("[insurers create]", err);
     res.status(500).json({ error: "No se pudo crear la aseguradora" });
+  }
+});
+
+api.delete("/insurers/:id", authenticate, requireAdmin, async (req, res) => {
+  const insurerId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("insurers").findOneAndDelete({ _id: insurerId });
+    if (!deleted?.value) return res.status(404).json({ error: "Aseguradora no encontrada" });
+
+    await Promise.all([
+      db.collection("clients").updateMany(
+        { "policies.insurer_id": insurerId },
+        { $set: { "policies.$[policy].insurer_id": null } },
+        { arrayFilters: [{ "policy.insurer_id": insurerId }] },
+      ),
+      db.collection("claims").updateMany({ insurer_id: insurerId }, { $set: { insurer_id: null } }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[insurers delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la aseguradora" });
   }
 });
 
