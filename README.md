@@ -22,6 +22,7 @@ Proyecto prototipo visual “Gestión de seguros”
 
 - Plan de evolución por etapas en `PLAN.md`.
 - Blueprint de implementación completo en `IMPLEMENTATION.md`.
+- Manual de uso funcional en `docs/USER_MANUAL.md`.
 
 ## Servidor API (MongoDB)
 
