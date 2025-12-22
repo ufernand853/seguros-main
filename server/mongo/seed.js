@@ -9,8 +9,8 @@ function hashPassword(plainText) {
 }
 
 const adminName = process.env.SEED_ADMIN_NAME || "Administrador";
-const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@seguros.local";
-const adminPassword = process.env.SEED_ADMIN_PASSWORD || "Cambiar123!";
+const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@seguros.com";
+const adminPassword = process.env.SEED_ADMIN_PASSWORD || "$eguros2026$";
 
 const users = [
   {
