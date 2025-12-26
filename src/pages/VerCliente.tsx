@@ -44,7 +44,7 @@ export default function VerCliente() {
   );
 
   const [form, setForm] = useState<ClientePayload>(initial);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
 
   // Modales SOLO lectura
   const [showDocModal, setShowDocModal] = useState(false);
@@ -64,7 +64,7 @@ export default function VerCliente() {
   return (
     <div className="flex-1 flex flex-col gap-4">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <h1 className="text-xl font-bold text-slate-800 mb-4">Ver Cliente</h1>
+        <h1 className="text-xl font-bold text-slate-800 mb-4">Editar Cliente</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Nombre */}
