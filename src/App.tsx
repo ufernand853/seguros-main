@@ -16,6 +16,7 @@ import InsuranceCarriersMaintenance from "./pages/InsuranceCarriersMaintenance";
 import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
+import VerCliente from "./pages/VerCliente";
 
 
 
@@ -40,6 +41,7 @@ export default function App() {
       <Route path="/aseguradoras" element={withLayout(<InsuranceCarriersMaintenance />)} />
       <Route path="/clientes" element={withLayout(<Clientes />)} />
       <Route path="/clientes/:id" element={withLayout(<ClientDetail />)} />
+      <Route path="/clientes/:id/editar" element={withLayout(<VerCliente />)} />
       <Route path="/clientes/nuevo" element={withLayout(<NuevoCliente />)} />
       <Route path="/clientes/ficha" element={withLayout(<Client360View />)} />
       <Route path="/clientes/polizas" element={withLayout(<ClaimRegistration />)} />

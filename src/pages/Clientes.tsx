@@ -51,6 +51,12 @@ export default function Clientes() {
   }, [clientes, debounced]);
 
   const open = (c: Cliente) => navigate(`/clientes/${encodeURIComponent(c.id)}`);
+  const editar = (c: Cliente) => navigate(`/clientes/${encodeURIComponent(c.id)}/editar`);
+  const eliminar = (c: Cliente) => {
+    const ok = window.confirm(`¿Eliminar a ${c.nombre}? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+    setClientes((prev) => prev.filter((item) => item.id !== c.id));
+  };
 
   const nuevo = () => navigate("/clientes/nuevo");
   const verFicha = () => navigate("/clientes/ficha");
@@ -120,19 +126,31 @@ export default function Clientes() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {resultados.map((c) => (
-              <li key={c.id}>
-                <button
-                  onClick={() => open(c)}
-                  className="w-full text-left px-3 py-3 md:py-4 hover:bg-slate-50 rounded-lg flex items-center justify-between"
-                >
-                  <div className="min-w-0">
+              <li key={c.id} className="px-3 py-3 md:py-4 hover:bg-slate-50 rounded-lg">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button type="button" onClick={() => open(c)} className="text-left min-w-0 flex-1">
                     <div className="font-semibold text-slate-800 truncate">{c.nombre}</div>
                     <div className="text-sm text-slate-600 truncate">
                       {c.doc ?? "—"} · {c.ciudad ?? "—"}
                     </div>
+                  </button>
+                  <div className="flex items-center gap-2 sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => editar(c)}
+                      className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm font-semibold"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => eliminar(c)}
+                      className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm font-semibold"
+                    >
+                      Eliminar
+                    </button>
                   </div>
-                  <span aria-hidden className="ml-3">›</span>
-                </button>
+                </div>
               </li>
             ))}
           </ul>
