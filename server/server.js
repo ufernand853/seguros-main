@@ -46,6 +46,38 @@ function mapClientSummary(client) {
   };
 }
 
+function mapProductionEntry(entry) {
+  if (!entry) return null;
+  const producer = entry.producer ?? {};
+  const companies = Array.isArray(entry.companies) ? entry.companies : entry.companias;
+
+  return {
+    id: String(entry._id),
+    periodo: entry.periodo ?? entry.period ?? null,
+    nombre: entry.nombre ?? producer.name ?? "Sin asignar",
+    localidad: entry.localidad ?? producer.location ?? null,
+    correo: entry.correo ?? producer.email ?? null,
+    celular: entry.celular ?? producer.phone ?? null,
+    companias: Array.isArray(companies)
+      ? companies.map((company) => ({
+          nombre: company.nombre ?? company.name ?? "Sin nombre",
+          automotor: typeof company.automotor === "number" ? company.automotor : company.auto ?? 0,
+          hogar: typeof company.hogar === "number" ? company.hogar : company.home ?? 0,
+          vida: typeof company.vida === "number" ? company.vida : company.life ?? 0,
+          caucion: typeof company.caucion === "number" ? company.caucion : company.surety ?? 0,
+          bonificacion: company.bonificacion ?? company.bonus ?? "—",
+        }))
+      : [],
+    objetivoMensual:
+      typeof entry.objetivoMensual === "number" ? entry.objetivoMensual : entry.objective_monthly ?? 0,
+    produccionMes:
+      typeof entry.produccionMes === "number" ? entry.produccionMes : entry.production_month ?? 0,
+    produccionAnual:
+      typeof entry.produccionAnual === "number" ? entry.produccionAnual : entry.production_year ?? 0,
+    seguimiento: entry.seguimiento ?? entry.followup ?? null,
+  };
+}
+
 const TASK_STATUSES = new Set(["pendiente", "en_curso", "completada"]);
 
 function normalizeTaskStatus(status, fallback = "pendiente") {
@@ -986,6 +1018,39 @@ api.delete("/pipeline/:id", authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[pipeline delete]", err);
     res.status(500).json({ error: "No se pudo eliminar la oportunidad" });
+  }
+});
+
+api.get("/production/periods", authenticate, async (_req, res) => {
+  try {
+    const db = getDb();
+    const [periods, periodsAlt] = await Promise.all([
+      db.collection("production").distinct("period"),
+      db.collection("production").distinct("periodo"),
+    ]);
+    const items = Array.from(new Set([...periods, ...periodsAlt].filter(Boolean)));
+    items.sort((a, b) => b.localeCompare(a));
+    res.json({ items });
+  } catch (err) {
+    console.error("[production periods]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los periodos" });
+  }
+});
+
+api.get("/production", authenticate, async (req, res) => {
+  const period = typeof req.query.period === "string" ? req.query.period : null;
+  try {
+    const db = getDb();
+    const filter = period
+      ? {
+          $or: [{ period }, { periodo: period }],
+        }
+      : {};
+    const rows = await db.collection("production").find(filter).sort({ nombre: 1 }).toArray();
+    res.json({ items: rows.map(mapProductionEntry).filter(Boolean) });
+  } catch (err) {
+    console.error("[production list]", err);
+    res.status(500).json({ error: "No se pudo recuperar la producción" });
   }
 });
 
