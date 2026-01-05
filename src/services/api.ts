@@ -280,6 +280,49 @@ export async function apiListRenewals(accessToken: string): Promise<{ items: Ren
   });
 }
 
+export type ProductionCompanyBreakdown = {
+  nombre: string;
+  automotor: number;
+  hogar: number;
+  vida: number;
+  caucion: number;
+  bonificacion: string;
+};
+
+export type ProductionProducer = {
+  id: string;
+  periodo?: string | null;
+  nombre: string;
+  localidad?: string | null;
+  correo?: string | null;
+  celular?: string | null;
+  companias: ProductionCompanyBreakdown[];
+  objetivoMensual: number;
+  produccionMes: number;
+  produccionAnual: number;
+  seguimiento?: string | null;
+};
+
+export async function apiListProductionPeriods(accessToken: string): Promise<{ items: string[] }> {
+  return request("/production/periods", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiListProduction(
+  period: string,
+  accessToken: string,
+): Promise<{ items: ProductionProducer[] }> {
+  const search = new URLSearchParams({ period });
+  return request(`/production?${search.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export type InsurerListItem = {
   id: string;
   name: string;

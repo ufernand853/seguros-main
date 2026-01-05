@@ -1,86 +1,57 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
 import type { DocumentAttachment } from "../components/UploadModal";
+import { useAuth } from "../auth/AuthProvider";
+import { apiListProduction, apiListProductionPeriods, type ProductionProducer } from "../services/api";
 
-type CompanyBreakdown = {
-  nombre: string;
-  automotor: number;
-  hogar: number;
-  vida: number;
-  caucion: number;
-  bonificacion: string;
-};
-
-type Producer = {
-  id: string;
-  nombre: string;
-  localidad: string;
-  correo: string;
-  celular: string;
-  companias: CompanyBreakdown[];
-  objetivoMensual: number;
-  produccionMes: number;
-  produccionAnual: number;
-  seguimiento: string;
-};
-
-const PRODUCERS: Producer[] = [
-  {
-    id: "A",
-    nombre: "Laura Gómez",
-    localidad: "Montevideo",
-    correo: "laura.gomez@brokeruy.com",
-    celular: "+598 98 555 111",
-    companias: [
-      { nombre: "Sancor", automotor: 18500, hogar: 6400, vida: 2300, caucion: 0, bonificacion: "2,5%" },
-      { nombre: "Sura", automotor: 9500, hogar: 4200, vida: 0, caucion: 5100, bonificacion: "1,5%" },
-    ],
-    objetivoMensual: 32000,
-    produccionMes: 35800,
-    produccionAnual: 91000,
-    seguimiento: "Revisar cross selling vida con cartera PyME",
-  },
-  {
-    id: "B",
-    nombre: "Martín Pereira",
-    localidad: "Paysandú",
-    correo: "martin.pereira@brokeruy.com",
-    celular: "+598 94 333 882",
-    companias: [
-      { nombre: "Federación Patronal", automotor: 12300, hogar: 2800, vida: 0, caucion: 2100, bonificacion: "3%" },
-      { nombre: "Porto", automotor: 6800, hogar: 0, vida: 0, caucion: 4700, bonificacion: "2%" },
-    ],
-    objetivoMensual: 25000,
-    produccionMes: 21900,
-    produccionAnual: 65400,
-    seguimiento: "Visitar cartera agro para renovar caución",
-  },
-  {
-    id: "C",
-    nombre: "Paula Méndez",
-    localidad: "Maldonado",
-    correo: "paula.mendez@brokeruy.com",
-    celular: "+598 97 221 340",
-    companias: [
-      { nombre: "Mapfre", automotor: 7200, hogar: 5600, vida: 1800, caucion: 0, bonificacion: "2%" },
-      { nombre: "BSE", automotor: 5400, hogar: 0, vida: 0, caucion: 3200, bonificacion: "1%" },
-    ],
-    objetivoMensual: 21000,
-    produccionMes: 24800,
-    produccionAnual: 58200,
-    seguimiento: "Enviar recordatorio de bonificación Mapfre",
-  },
-];
-
-const PERIODOS = ["Marzo 2024", "Febrero 2024", "Enero 2024"];
+type Producer = ProductionProducer;
 
 export default function ProductionControl() {
-  const [periodo, setPeriodo] = useState(PERIODOS[0]);
+  const { token } = useAuth();
+  const [periodos, setPeriodos] = useState<string[]>([]);
+  const [periodo, setPeriodo] = useState("");
   const [search, setSearch] = useState("");
   const [activeProducerId, setActiveProducerId] = useState<string | null>(null);
   const [attachmentsByProducer, setAttachmentsByProducer] = useState<
     Record<string, DocumentAttachment[]>
   >({});
+  const [producers, setProducers] = useState<Producer[]>([]);
+  const [isLoading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+
+    apiListProductionPeriods(token)
+      .then((data) => {
+        const items = Array.isArray(data.items) ? data.items : [];
+        setPeriodos(items);
+        setPeriodo((current) => (current && items.includes(current) ? current : items[0] ?? ""));
+      })
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "No se pudieron cargar los periodos"),
+      )
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (!periodo) {
+      setProducers([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    apiListProduction(periodo, token)
+      .then((data) => setProducers(data.items ?? []))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "No se pudo cargar la producción"),
+      )
+      .finally(() => setLoading(false));
+  }, [periodo, token]);
 
   const documentCategories = DEFAULT_DOCUMENT_CATEGORIES;
 
@@ -95,15 +66,15 @@ export default function ProductionControl() {
 
   const filtrados = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return PRODUCERS.filter((prod) => {
+    return producers.filter((prod) => {
       if (!q) return true;
       return (
         prod.nombre.toLowerCase().includes(q) ||
-        prod.localidad.toLowerCase().includes(q) ||
+        prod.localidad?.toLowerCase().includes(q) ||
         prod.companias.some((c) => c.nombre.toLowerCase().includes(q))
       );
     });
-  }, [search]);
+  }, [producers, search]);
 
   const totales = useMemo(() => {
     return filtrados.reduce(
@@ -150,12 +121,17 @@ export default function ProductionControl() {
               value={periodo}
               onChange={(event) => setPeriodo(event.target.value)}
               className="border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              disabled={isLoading || periodos.length === 0}
             >
-              {PERIODOS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
+              {periodos.length ? (
+                periodos.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))
+              ) : (
+                <option value="">Sin periodos disponibles</option>
+              )}
             </select>
           </div>
         </div>
@@ -165,7 +141,9 @@ export default function ProductionControl() {
           <SummaryCard label="Objetivo mensual" value={`USD ${totales.objetivo.toLocaleString("es-UY")}`} />
           <SummaryCard label="Cumplimiento promedio" value={`${cumplimiento}%`} highlight={cumplimiento >= 100} />
         </div>
-        <p className="mt-3 text-sm text-slate-500">Datos correspondientes a {periodo}.</p>
+        <p className="mt-3 text-sm text-slate-500">
+          {periodo ? `Datos correspondientes a ${periodo}.` : "No hay periodos con información disponible."}
+        </p>
       </header>
 
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 flex-1 flex flex-col min-h-0">
@@ -199,89 +177,106 @@ export default function ProductionControl() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtrados.map((prod) => {
-                const cumplimientoProd = Math.round((prod.produccionMes / prod.objetivoMensual) * 100);
-                return (
-                  <tr key={prod.id} className="align-top hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900">{prod.nombre}</div>
-                      <div className="text-xs text-slate-500">{prod.correo}</div>
-                      <div className="text-xs text-slate-500">{prod.celular}</div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{prod.localidad}</td>
-                    <td className="px-4 py-3 text-slate-700">USD {prod.produccionMes.toLocaleString("es-UY")}</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <div>USD {prod.objetivoMensual.toLocaleString("es-UY")}</div>
-                      <div className="text-xs text-slate-500 mt-1">{cumplimientoProd}% del objetivo</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ul className="space-y-2">
-                        {prod.companias.map((compania) => (
-                          <li key={compania.nombre} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                            <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
-                              <span>{compania.nombre}</span>
-                              <span className="text-emerald-700">{compania.bonificacion}</span>
-                            </div>
-                            <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
-                              <div>
-                                <dt className="font-medium text-slate-500">Automotor</dt>
-                                <dd>USD {compania.automotor.toLocaleString("es-UY")}</dd>
+              {isLoading && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                    Cargando producción…
+                  </td>
+                </tr>
+              )}
+              {!isLoading && error && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-red-600">
+                    {error}
+                  </td>
+                </tr>
+              )}
+              {!isLoading &&
+                !error &&
+                filtrados.map((prod) => {
+                  const cumplimientoProd =
+                    prod.objetivoMensual === 0 ? 0 : Math.round((prod.produccionMes / prod.objetivoMensual) * 100);
+                  return (
+                    <tr key={prod.id} className="align-top hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">{prod.nombre}</div>
+                        <div className="text-xs text-slate-500">{prod.correo ?? "—"}</div>
+                        <div className="text-xs text-slate-500">{prod.celular ?? "—"}</div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{prod.localidad ?? "—"}</td>
+                      <td className="px-4 py-3 text-slate-700">USD {prod.produccionMes.toLocaleString("es-UY")}</td>
+                      <td className="px-4 py-3 text-slate-700">
+                        <div>USD {prod.objetivoMensual.toLocaleString("es-UY")}</div>
+                        <div className="text-xs text-slate-500 mt-1">{cumplimientoProd}% del objetivo</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ul className="space-y-2">
+                          {prod.companias.map((compania) => (
+                            <li key={compania.nombre} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                              <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
+                                <span>{compania.nombre}</span>
+                                <span className="text-emerald-700">{compania.bonificacion}</span>
                               </div>
-                              <div>
-                                <dt className="font-medium text-slate-500">Hogar</dt>
-                                <dd>USD {compania.hogar.toLocaleString("es-UY")}</dd>
-                              </div>
-                              <div>
-                                <dt className="font-medium text-slate-500">Vida</dt>
-                                <dd>USD {compania.vida.toLocaleString("es-UY")}</dd>
-                              </div>
-                              <div>
-                                <dt className="font-medium text-slate-500">Caución</dt>
-                                <dd>USD {compania.caucion.toLocaleString("es-UY")}</dd>
-                              </div>
-                            </dl>
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 text-sm">{prod.seguimiento}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-2">
-                        {attachmentsByProducer[prod.id]?.length ? (
-                          <ul className="space-y-1 text-xs text-slate-600">
-                            {attachmentsByProducer[prod.id].map((attachment, index) => (
-                              <li
-                                key={`${attachment.file.name}-${index}`}
-                                className="flex flex-wrap items-center gap-2"
-                              >
-                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                  {categoryLabels[attachment.category] ?? attachment.category}
-                                </span>
-                                <span
-                                  className="truncate text-slate-500"
-                                  title={attachment.file.name}
+                              <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
+                                <div>
+                                  <dt className="font-medium text-slate-500">Automotor</dt>
+                                  <dd>USD {compania.automotor.toLocaleString("es-UY")}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-medium text-slate-500">Hogar</dt>
+                                  <dd>USD {compania.hogar.toLocaleString("es-UY")}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-medium text-slate-500">Vida</dt>
+                                  <dd>USD {compania.vida.toLocaleString("es-UY")}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-medium text-slate-500">Caución</dt>
+                                  <dd>USD {compania.caucion.toLocaleString("es-UY")}</dd>
+                                </div>
+                              </dl>
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 text-sm">{prod.seguimiento ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-2">
+                          {attachmentsByProducer[prod.id]?.length ? (
+                            <ul className="space-y-1 text-xs text-slate-600">
+                              {attachmentsByProducer[prod.id].map((attachment, index) => (
+                                <li
+                                  key={`${attachment.file.name}-${index}`}
+                                  className="flex flex-wrap items-center gap-2"
                                 >
-                                  {attachment.file.name}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="text-xs text-slate-400">Sin adjuntos</span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setActiveProducerId(prod.id)}
-                          className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
-                        >
-                          Gestionar adjuntos
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtrados.length === 0 && (
+                                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                    {categoryLabels[attachment.category] ?? attachment.category}
+                                  </span>
+                                  <span
+                                    className="truncate text-slate-500"
+                                    title={attachment.file.name}
+                                  >
+                                    {attachment.file.name}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span className="text-xs text-slate-400">Sin adjuntos</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setActiveProducerId(prod.id)}
+                            className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                          >
+                            Gestionar adjuntos
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              {!isLoading && !error && filtrados.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                     No se encontraron productores para el criterio seleccionado.
