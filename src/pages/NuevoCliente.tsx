@@ -18,8 +18,18 @@ type NuevoClientePayload = {
   pais?: string;
   contacto?: string;
   notas?: string;
+  laboralHistorial: LaboralHistorialItem[];
   docFiles: DocumentAttachment[]; // fotos del documento
   otherDocs: DocumentAttachment[]; // otros documentos
+};
+
+type LaboralHistorialItem = {
+  tipoEmpresa: string;
+  tipoVinculo: string;
+  nombreEmpresa: string;
+  fechaIngreso: string;
+  nominal: string;
+  promedio: string;
 };
 
 const DOCUMENT_TYPE_OPTIONS: DocumentCategoryOption[] = [
@@ -30,6 +40,15 @@ const DOCUMENT_TYPE_OPTIONS: DocumentCategoryOption[] = [
   { value: "otros", label: "Otros" },
 ];
 const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
+const VINCULO_OPTIONS = ["Empleado", "Dependiente", "Renta"];
+const emptyLaboralHistorialItem: LaboralHistorialItem = {
+  tipoEmpresa: "",
+  tipoVinculo: VINCULO_OPTIONS[0],
+  nombreEmpresa: "",
+  fechaIngreso: "",
+  nominal: "",
+  promedio: "",
+};
 
 export default function NuevoCliente() {
   const navigate = useNavigate();
@@ -45,6 +64,7 @@ export default function NuevoCliente() {
     pais: "",
     contacto: "",
     notas: "",
+    laboralHistorial: [{ ...emptyLaboralHistorialItem }],
     docFiles: [],
     otherDocs: [],
   });
@@ -83,6 +103,25 @@ export default function NuevoCliente() {
 
   const onChange = (k: keyof NuevoClientePayload, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
+
+  const onLaboralHistorialChange = (index: number, field: keyof LaboralHistorialItem, value: string) =>
+    setForm((current) => {
+      const next = [...current.laboralHistorial];
+      next[index] = { ...next[index], [field]: value };
+      return { ...current, laboralHistorial: next };
+    });
+
+  const addLaboralHistorial = () =>
+    setForm((current) => ({
+      ...current,
+      laboralHistorial: [...current.laboralHistorial, { ...emptyLaboralHistorialItem }],
+    }));
+
+  const removeLaboralHistorial = (index: number) =>
+    setForm((current) => {
+      const next = current.laboralHistorial.filter((_, idx) => idx !== index);
+      return { ...current, laboralHistorial: next.length ? next : [{ ...emptyLaboralHistorialItem }] };
+    });
 
   const getCategoryLabel = (value: string) =>
     DOCUMENT_TYPE_OPTIONS.find((opt) => opt.value === value)?.label ?? value;
@@ -331,6 +370,119 @@ export default function NuevoCliente() {
               className="w-full min-h-[96px] rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
               placeholder="Notas internas..."
             />
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-slate-200 pt-4">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800">Histórico de cambios laborales</h2>
+              <p className="text-sm text-slate-500">
+                Registra tipo de empresa, vínculo, nombre, fecha de ingreso y valores nominales/promedio.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addLaboralHistorial}
+              className="mt-2 inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 md:mt-0"
+            >
+              + Agregar cambio laboral
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            {form.laboralHistorial.map((item, index) => (
+              <div key={`laboral-${index}`} className="rounded-lg border border-slate-200 p-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Tipo de empresa
+                    </label>
+                    <input
+                      value={item.tipoEmpresa}
+                      onChange={(event) => onLaboralHistorialChange(index, "tipoEmpresa", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Ej: Privada / Pública"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Vínculo
+                    </label>
+                    <select
+                      value={item.tipoVinculo}
+                      onChange={(event) => onLaboralHistorialChange(index, "tipoVinculo", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    >
+                      {VINCULO_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Nombre empresa
+                    </label>
+                    <input
+                      value={item.nombreEmpresa}
+                      onChange={(event) => onLaboralHistorialChange(index, "nombreEmpresa", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Ej: Empresa S.A."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Fecha de ingreso
+                    </label>
+                    <input
+                      type="date"
+                      value={item.fechaIngreso}
+                      onChange={(event) => onLaboralHistorialChange(index, "fechaIngreso", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Nominal
+                    </label>
+                    <input
+                      value={item.nominal}
+                      onChange={(event) => onLaboralHistorialChange(index, "nominal", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Ej: 120000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Promedio
+                    </label>
+                    <input
+                      value={item.promedio}
+                      onChange={(event) => onLaboralHistorialChange(index, "promedio", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Ej: 95000"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => removeLaboralHistorial(index)}
+                    className="text-sm font-semibold text-red-600 hover:text-red-700"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
