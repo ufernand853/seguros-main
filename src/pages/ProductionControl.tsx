@@ -89,6 +89,92 @@ export default function ProductionControl() {
 
   const cumplimiento = totales.objetivo === 0 ? 0 : Math.round((totales.produccionMes / totales.objetivo) * 100);
 
+  const escapeCsv = (value: string | number | null | undefined) => {
+    const stringValue = value === null || value === undefined ? "" : String(value);
+    if (/[",\n]/.test(stringValue)) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const handleExport = () => {
+    const headers = [
+      "Periodo",
+      "Productor",
+      "Localidad",
+      "Correo",
+      "Celular",
+      "Compania",
+      "Bonificacion",
+      "Automotor",
+      "Hogar",
+      "Vida",
+      "Caucion",
+      "ProduccionMes",
+      "ObjetivoMensual",
+      "Cumplimiento",
+      "Seguimiento",
+    ];
+
+    const rows = filtrados.flatMap((prod) => {
+      const cumplimientoProd =
+        prod.objetivoMensual === 0 ? 0 : Math.round((prod.produccionMes / prod.objetivoMensual) * 100);
+      const baseRow = [
+        periodo,
+        prod.nombre,
+        prod.localidad ?? "",
+        prod.correo ?? "",
+        prod.celular ?? "",
+      ];
+
+      if (!prod.companias.length) {
+        return [
+          [
+            ...baseRow,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            prod.produccionMes,
+            prod.objetivoMensual,
+            `${cumplimientoProd}%`,
+            prod.seguimiento ?? "",
+          ],
+        ];
+      }
+
+      return prod.companias.map((compania) => [
+        ...baseRow,
+        compania.nombre,
+        compania.bonificacion,
+        compania.automotor,
+        compania.hogar,
+        compania.vida,
+        compania.caucion,
+        prod.produccionMes,
+        prod.objetivoMensual,
+        `${cumplimientoProd}%`,
+        prod.seguimiento ?? "",
+      ]);
+    });
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("\n");
+
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `produccion-${periodo || "sin-periodo"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const closeModal = () => setActiveProducerId(null);
 
   const handleConfirmAttachments = (files: DocumentAttachment[]) => {
@@ -147,7 +233,7 @@ export default function ProductionControl() {
       </header>
 
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 flex-1 flex flex-col min-h-0">
-        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div className="flex-1">
             <label className="block text-sm font-semibold text-slate-700 mb-2" htmlFor="producer-search">
               Buscar productor o compañía
@@ -160,6 +246,18 @@ export default function ProductionControl() {
               placeholder="Nombre, localidad o aseguradora"
               className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
             />
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold text-slate-700">Exportación</span>
+            <button
+              type="button"
+              onClick={handleExport}
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+              disabled={!filtrados.length}
+            >
+              Exportar listado a Excel
+            </button>
+            <span className="text-xs text-slate-500">Descarga CSV con detalle por compañía.</span>
           </div>
         </div>
 
