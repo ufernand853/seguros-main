@@ -351,11 +351,19 @@ api.get("/clients", authenticate, async (_req, res) => {
       return acc;
     }, {});
 
+    const rolesByClientPolicy = policyLinks.reduce((acc, link) => {
+      const key = `${link.client_id}:${link.policy_id}`;
+      if (!acc[key]) acc[key] = new Set();
+      acc[key].add(link.role);
+      return acc;
+    }, {});
+
     const policiesByClient = policyLinks.reduce((acc, link) => {
       const policy = policiesById[link.policy_id];
       if (!policy) return acc;
       if (!acc[link.client_id]) acc[link.client_id] = new Map();
       if (!acc[link.client_id].has(link.policy_id)) {
+        const rolesKey = `${link.client_id}:${link.policy_id}`;
         acc[link.client_id].set(link.policy_id, {
           id: String(policy._id),
           type: policy.type ?? null,
@@ -364,6 +372,7 @@ api.get("/clients", authenticate, async (_req, res) => {
           status: policy.status ?? null,
           premium: typeof policy.premium === "number" ? policy.premium : null,
           next_renewal: policy.next_renewal ?? null,
+          roles: rolesByClientPolicy[rolesKey] ? Array.from(rolesByClientPolicy[rolesKey]) : [],
         });
       }
       return acc;
@@ -376,6 +385,7 @@ api.get("/clients", authenticate, async (_req, res) => {
         : (client.policies ?? []).map((policy) => ({
             ...policy,
             insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+            roles: [],
           })),
     }));
 
@@ -689,6 +699,12 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
     const tasksMapped = tasks.map(mapDocument);
     const nextTask = tasksMapped.find((t) => t.status !== "completada") || null;
 
+    const rolesByPolicy = policyLinks.reduce((acc, link) => {
+      if (!acc[link.policy_id]) acc[link.policy_id] = new Set();
+      acc[link.policy_id].add(link.role);
+      return acc;
+    }, {});
+
     const policies = policyLinks.length
       ? Array.from(
           policyLinks.reduce((acc, link) => {
@@ -702,6 +718,7 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
               status: policy.status ?? null,
               premium: typeof policy.premium === "number" ? policy.premium : null,
               next_renewal: policy.next_renewal ?? null,
+              roles: rolesByPolicy[link.policy_id] ? Array.from(rolesByPolicy[link.policy_id]) : [],
             });
             return acc;
           }, new Map())
@@ -710,6 +727,7 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
       : (clientDoc.policies ?? []).map((policy) => ({
           ...policy,
           insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+          roles: [],
         }));
 
     res.json({
