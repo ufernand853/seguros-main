@@ -59,8 +59,8 @@ export default function Clientes() {
   };
 
   const nuevo = () => navigate("/clientes/nuevo");
-  const verFicha = () => navigate("/clientes/ficha");
   const verPolizas = () => navigate("/clientes/polizas");
+  const verFicha = (c: Cliente) => navigate(`/clientes/${encodeURIComponent(c.id)}/ficha`);
 
   return (
     <div className="flex-1 flex flex-col gap-4">
@@ -91,13 +91,6 @@ export default function Clientes() {
               className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
             >
               + Nuevo cliente
-            </button>
-            <button
-              type="button"
-              onClick={verFicha}
-              className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-            >
-              Ver ficha integral
             </button>
             <button
               type="button"
@@ -135,6 +128,13 @@ export default function Clientes() {
                     </div>
                   </button>
                   <div className="flex items-center gap-2 sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => verFicha(c)}
+                      className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold"
+                    >
+                      Ficha integral
+                    </button>
                     <button
                       type="button"
                       onClick={() => editar(c)}

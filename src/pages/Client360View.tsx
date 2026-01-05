@@ -1,44 +1,13 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-
-const CLIENT_DATA = {
-  nombre: "Alicia Demo",
-  documento: "CI 4.999.999-9",
-  telefono: "+598 94 000 000",
-  email: "alicia.demo@example.com",
-  direccion: "Calle Imaginaria 1234, Apto 301",
-  ciudad: "Montevideo",
-  titular: "Alicia Demo",
-  vigencia: "Desde 15/01/2021",
-};
-
-const INITIAL_INSURANCE_SUMMARY = [
-  { nombre: "Garantía de Alquiler", compania: "Sura", estado: "Vigente", vigencia: "Hasta 15/01/2025" },
-  { nombre: "Seguro de Auto", compania: "Porto", estado: "Vigente", vigencia: "Hasta 15/01/2025" },
-  { nombre: "Seguro Viajero", compania: "Mapfre", estado: "En curso", vigencia: "Próximo viaje 20/07/2024" },
-];
-
-const ASSOCIATED_CLIENTS = [
-  { relacion: "Titular", nombre: "Alicia Demo", producto: "Garantía Alquiler" },
-  { relacion: "Copropietario", nombre: "Bruno Demo", producto: "Seguro Auto" },
-  { relacion: "Inquilino", nombre: "Carla Demo", producto: "Garantía Alquiler" },
-];
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+import { apiGetClientSummary, type ClientSummary } from "../services/api";
 
 const CLAIM_STAGES = [
   { etapa: "Ingreso", fecha: "2024-03-01", detalle: "Denuncia por choque leve en Av. Demo" },
   { etapa: "Inspección", fecha: "2024-03-03", detalle: "Inspección fotográfica enviada a la aseguradora" },
   { etapa: "Carta de cobertura", fecha: "2024-03-05", detalle: "Carta emitida y enviada al cliente" },
   { etapa: "Pago", fecha: "2024-03-12", detalle: "Pago de reparación autorizado" },
-];
-
-const INITIAL_CLAIM_REGISTRATIONS = [
-  {
-    poliza: "Seguro de Auto",
-    fecha: "2024-03-10",
-    categoria: "Automotor",
-    descripcion: "Seguimiento de siniestro existente por choque leve",
-    estado: "En curso",
-  },
 ];
 
 const RENEWAL_ALERTS = [
@@ -84,10 +53,66 @@ const EMISSION_REQUIREMENTS = {
   ],
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  asegurado: "Asegurado",
+  tomador: "Tomador",
+  cesionario: "Cesionario",
+};
+
 export default function Client360View() {
   const navigate = useNavigate();
-  const insuranceSummary = INITIAL_INSURANCE_SUMMARY;
-  const claimRegistrations = INITIAL_CLAIM_REGISTRATIONS;
+  const { id } = useParams();
+  const { token } = useAuth();
+
+  const [client, setClient] = useState<ClientSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id || !token) return;
+    setIsLoading(true);
+    setError(null);
+
+    apiGetClientSummary(id, token)
+      .then((data) => setClient(data))
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar la ficha del cliente"))
+      .finally(() => setIsLoading(false));
+  }, [id, token]);
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "—";
+    return parsed.toLocaleDateString("es-UY");
+  };
+
+  const primaryContact = client?.contacts?.[0];
+  const clientData = [
+    { label: "Nombre", value: client?.name ?? "—" },
+    { label: "Documento", value: client?.document ?? "—" },
+    { label: "Teléfono", value: primaryContact?.phone ?? "Sin teléfono" },
+    { label: "Email", value: primaryContact?.email ?? "Sin email" },
+    { label: "Ciudad", value: client?.city ?? "—" },
+    {
+      label: "Próxima renovación",
+      value: client?.renewal?.renewal_date ? formatDate(client.renewal.renewal_date) : "Sin renovación registrada",
+    },
+  ];
+
+  const insuranceSummary = (client?.policies ?? []).map((policy) => ({
+    nombre: policy.type ?? "Póliza sin tipo",
+    compania: policy.insurer ?? policy.insurer_id ?? "Aseguradora por confirmar",
+    estado: policy.status ?? "Sin estado",
+    vigencia: policy.next_renewal ? `Renueva ${formatDate(policy.next_renewal)}` : "Sin fecha de renovación",
+  }));
+
+  const associatedClients = (client?.policies ?? []).map((policy) => ({
+    relacion: policy.roles?.[0] ? ROLE_LABELS[policy.roles[0]] ?? policy.roles[0] : "Titular",
+    nombre: client?.name ?? "—",
+    producto: policy.type ?? "Póliza sin tipo",
+  }));
+
+  const claimRegistrations = [];
 
   const actionCards = useMemo(
     () => [
@@ -109,6 +134,23 @@ export default function Client360View() {
     [navigate],
   );
 
+  if (!id) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div className="text-center space-y-3">
+          <p className="text-lg font-semibold text-slate-800">Selecciona un cliente para ver su ficha integral</p>
+          <button
+            type="button"
+            onClick={() => navigate("/clientes")}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-black text-white font-semibold"
+          >
+            Ir al listado de clientes
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col gap-6">
       <header className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
@@ -121,16 +163,20 @@ export default function Client360View() {
 
       <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-slate-800">Datos del cliente</h2>
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.entries(CLIENT_DATA).map(([key, value]) => (
-            <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {key.replace(/([A-Z])/g, " $1").toUpperCase()}
+        {isLoading ? (
+          <div className="mt-4 text-center text-slate-500">Cargando datos del cliente…</div>
+        ) : error ? (
+          <div className="mt-4 text-center text-red-600">{error}</div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {clientData.map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</div>
+                <div className="mt-1 text-sm text-slate-800">{item.value}</div>
               </div>
-              <div className="mt-1 text-sm text-slate-800">{value}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -160,31 +206,42 @@ export default function Client360View() {
           <p className="mt-1 text-sm text-slate-600">
             Seguimiento de cobertura total con detalle de compañía, estado y vigencia.
           </p>
-          <ul className="mt-4 space-y-3">
-            {insuranceSummary.map((item) => (
-              <li key={item.nombre} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3">
-                <div>
-                  <div className="font-semibold text-slate-900">{item.nombre}</div>
-                  <div className="text-sm text-slate-500">{item.compania}</div>
-                </div>
-                <div className="text-sm text-slate-600">
-                  <span className="font-semibold">{item.estado}</span> · {item.vigencia}
-                </div>
-              </li>
-            ))}
-          </ul>
+          {insuranceSummary.length ? (
+            <ul className="mt-4 space-y-3">
+              {insuranceSummary.map((item) => (
+                <li
+                  key={`${item.nombre}-${item.compania}`}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3"
+                >
+                  <div>
+                    <div className="font-semibold text-slate-900">{item.nombre}</div>
+                    <div className="text-sm text-slate-500">{item.compania}</div>
+                  </div>
+                  <div className="text-sm text-slate-600">
+                    <span className="font-semibold">{item.estado}</span> · {item.vigencia}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">No hay pólizas activas registradas para este cliente.</p>
+          )}
         </div>
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-slate-800">Clientes asociados por producto</h3>
-          <ul className="mt-4 space-y-3">
-            {ASSOCIATED_CLIENTS.map((item) => (
-              <li key={`${item.relacion}-${item.nombre}`} className="rounded-xl border border-slate-100 px-4 py-3 bg-slate-50">
-                <div className="text-xs font-semibold text-slate-500">{item.relacion}</div>
-                <div className="text-sm text-slate-800">{item.nombre}</div>
-                <div className="text-xs text-slate-500">Producto: {item.producto}</div>
-              </li>
-            ))}
-          </ul>
+          {associatedClients.length ? (
+            <ul className="mt-4 space-y-3">
+              {associatedClients.map((item) => (
+                <li key={`${item.relacion}-${item.producto}`} className="rounded-xl border border-slate-100 px-4 py-3 bg-slate-50">
+                  <div className="text-xs font-semibold text-slate-500">{item.relacion}</div>
+                  <div className="text-sm text-slate-800">{item.nombre}</div>
+                  <div className="text-xs text-slate-500">Producto: {item.producto}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">Sin asociaciones registradas para este cliente.</p>
+          )}
         </div>
       </section>
 
@@ -233,21 +290,25 @@ export default function Client360View() {
         <p className="mt-1 text-sm text-slate-600">
           Mantén la trazabilidad de cada denuncia y comparte avances con el cliente desde esta misma vista integral.
         </p>
-        <ul className="mt-4 space-y-3">
-          {claimRegistrations.map((claim, index) => (
-            <li key={`${claim.poliza}-${claim.fecha}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">{claim.poliza}</div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500">{claim.categoria}</div>
+        {claimRegistrations.length ? (
+          <ul className="mt-4 space-y-3">
+            {claimRegistrations.map((claim, index) => (
+              <li key={`${claim.poliza}-${claim.fecha}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{claim.poliza}</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">{claim.categoria}</div>
+                  </div>
+                  <div className="text-xs font-medium text-emerald-700">{claim.estado}</div>
                 </div>
-                <div className="text-xs font-medium text-emerald-700">{claim.estado}</div>
-              </div>
-              <div className="mt-2 text-xs text-slate-500">Registrado el {claim.fecha}</div>
-              <p className="mt-2 text-sm text-slate-700 leading-relaxed">{claim.descripcion}</p>
-            </li>
-          ))}
-        </ul>
+                <div className="mt-2 text-xs text-slate-500">Registrado el {claim.fecha}</div>
+                <p className="mt-2 text-sm text-slate-700 leading-relaxed">{claim.descripcion}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">Este cliente no tiene siniestros registrados todavía.</p>
+        )}
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
