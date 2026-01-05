@@ -40,6 +40,8 @@ async function seed() {
   await db.collection("tasks").deleteMany({});
   await db.collection("renewals").deleteMany({});
   await db.collection("claims").deleteMany({});
+  await db.collection("policies").deleteMany({});
+  await db.collection("policy_clients").deleteMany({});
   await db.collection("insurers").deleteMany({});
   await db.collection("employees").deleteMany({});
 
