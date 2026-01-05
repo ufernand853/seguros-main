@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import UploadModal, {
   type DocumentAttachment,
   type DocumentCategoryOption,
 } from "../components/UploadModal";
-import { apiCreateClient } from "../services/api";
+import { apiCreateClient, apiCreatePolicy, apiListInsurers, type InsurerListItem } from "../services/api";
 
 type NuevoClientePayload = {
   nombre: string;
@@ -29,6 +29,7 @@ const DOCUMENT_TYPE_OPTIONS: DocumentCategoryOption[] = [
   { value: "imagen", label: "Imágenes" },
   { value: "otros", label: "Otros" },
 ];
+const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
 
 export default function NuevoCliente() {
   const navigate = useNavigate();
@@ -53,6 +54,32 @@ export default function NuevoCliente() {
   const [showOtherDocsModal, setShowOtherDocsModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setSaving] = useState(false);
+  const [insurers, setInsurers] = useState<InsurerListItem[]>([]);
+  const [isLoadingInsurers, setLoadingInsurers] = useState(false);
+  const [policyForm, setPolicyForm] = useState({
+    insurerId: "",
+    type: "",
+    status: POLICY_STATUSES[0],
+    premium: "",
+    nextRenewal: "",
+  });
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingInsurers(true);
+    apiListInsurers(token)
+      .then((data) => {
+        setInsurers(data.items ?? []);
+        setPolicyForm((prev) => ({
+          ...prev,
+          insurerId: prev.insurerId || data.items?.[0]?.id || "",
+        }));
+      })
+      .catch(() => {
+        setInsurers([]);
+      })
+      .finally(() => setLoadingInsurers(false));
+  }, [token]);
 
   const onChange = (k: keyof NuevoClientePayload, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
@@ -101,7 +128,7 @@ export default function NuevoCliente() {
             ]
           : [];
 
-      await apiCreateClient(
+      const created = await apiCreateClient(
         {
           name: form.nombre.trim(),
           document: form.rut.trim(),
@@ -110,6 +137,41 @@ export default function NuevoCliente() {
         },
         token,
       );
+
+      const createdId =
+        typeof created === "object" && created
+          ? (created as { id?: string; item?: { id?: string } }).id ?? (created as { item?: { id?: string } }).item?.id
+          : undefined;
+
+      if (policyForm.insurerId && policyForm.type.trim()) {
+        if (!createdId) {
+          setError("Cliente creado, pero no se pudo asociar la póliza porque falta el identificador del cliente.");
+          navigate("/clientes");
+          return;
+        }
+
+        try {
+          await apiCreatePolicy(
+            {
+              type: policyForm.type.trim(),
+              insurer_id: policyForm.insurerId,
+              status: policyForm.status || null,
+              premium: policyForm.premium ? Number(policyForm.premium) : null,
+              next_renewal: policyForm.nextRenewal || null,
+              asegurados: [createdId],
+            },
+            token,
+          );
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? `Cliente creado, pero no se pudo asociar la póliza: ${err.message}`
+              : "Cliente creado, pero no se pudo asociar la póliza.",
+          );
+          navigate(`/clientes/${encodeURIComponent(createdId)}/editar`);
+          return;
+        }
+      }
 
       navigate("/clientes");
     } catch (err) {
@@ -269,6 +331,94 @@ export default function NuevoCliente() {
               className="w-full min-h-[96px] rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
               placeholder="Notas internas..."
             />
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-slate-200 pt-4">
+          <h2 className="text-base font-semibold text-slate-800">Asociar aseguradora y póliza (opcional)</h2>
+          <p className="text-sm text-slate-500">
+            Define la aseguradora y una póliza inicial para que el cliente quede vinculado desde el alta.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Aseguradora
+              </label>
+              <select
+                value={policyForm.insurerId}
+                onChange={(event) => setPolicyForm((prev) => ({ ...prev, insurerId: event.target.value }))}
+                disabled={isLoadingInsurers || insurers.length === 0}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-100"
+              >
+                <option value="">
+                  {isLoadingInsurers
+                    ? "Cargando aseguradoras..."
+                    : insurers.length
+                      ? "Selecciona una aseguradora"
+                      : "No hay aseguradoras disponibles"}
+                </option>
+                {insurers.map((insurer) => (
+                  <option key={insurer.id} value={insurer.id}>
+                    {insurer.name ?? insurer.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Tipo de póliza
+              </label>
+              <input
+                value={policyForm.type}
+                onChange={(event) => setPolicyForm((prev) => ({ ...prev, type: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="Ej: Automotor"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Estado
+              </label>
+              <select
+                value={policyForm.status}
+                onChange={(event) => setPolicyForm((prev) => ({ ...prev, status: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                {POLICY_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Prima estimada (USD)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={policyForm.premium}
+                onChange={(event) => setPolicyForm((prev) => ({ ...prev, premium: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Próxima renovación
+              </label>
+              <input
+                type="date"
+                value={policyForm.nextRenewal}
+                onChange={(event) => setPolicyForm((prev) => ({ ...prev, nextRenewal: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </div>
           </div>
         </div>
 

@@ -2,9 +2,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import ViewFilesModal, { ViewFileItem } from "../components/ViewFilesModal";
+import ViewFilesModal from "../components/ViewFilesModal";
+import type { ViewFileItem } from "../components/ViewFilesModal";
 import {
   apiGetClientSummary,
+  apiCreatePolicy,
   apiListInsurers,
   apiListPolicies,
   apiUpdatePolicy,
@@ -33,6 +35,7 @@ const ROLE_OPTIONS = [
   { value: "tomadores", label: "Tomador" },
   { value: "cesionarios", label: "Cesionario" },
 ];
+const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
 
 export default function VerCliente() {
   const navigate = useNavigate();
@@ -66,6 +69,13 @@ export default function VerCliente() {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySuccess, setPolicySuccess] = useState<string | null>(null);
   const [isPolicySaving, setPolicySaving] = useState(false);
+  const [policyForm, setPolicyForm] = useState({
+    insurerId: "",
+    type: "",
+    status: POLICY_STATUSES[0],
+    premium: "",
+    nextRenewal: "",
+  });
 
   // Modales SOLO lectura
   const [showDocModal, setShowDocModal] = useState(false);
@@ -96,6 +106,10 @@ export default function VerCliente() {
         setPolicies(data.policies ?? []);
         setAvailablePolicies(policiesResponse.items ?? []);
         setInsurers(insurersResponse.items ?? []);
+        setPolicyForm((prev) => ({
+          ...prev,
+          insurerId: prev.insurerId || insurersResponse.items?.[0]?.id || "",
+        }));
         setIsEditing(true);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el cliente"))
@@ -169,6 +183,46 @@ export default function VerCliente() {
       setSelectedPolicyId("");
     } catch (err) {
       setPolicyError(err instanceof Error ? err.message : "No se pudo asociar la póliza.");
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  const handleCreatePolicy = async () => {
+    if (!id || !token) return;
+    setPolicyError(null);
+    setPolicySuccess(null);
+
+    if (!policyForm.insurerId || !policyForm.type.trim()) {
+      setPolicyError("Completa aseguradora y tipo de póliza para crearla.");
+      return;
+    }
+
+    setPolicySaving(true);
+    try {
+      await apiCreatePolicy(
+        {
+          type: policyForm.type.trim(),
+          insurer_id: policyForm.insurerId,
+          status: policyForm.status || null,
+          premium: policyForm.premium ? Number(policyForm.premium) : null,
+          next_renewal: policyForm.nextRenewal || null,
+          asegurados: [id],
+        },
+        token,
+      );
+
+      const [clientData, policiesResponse] = await Promise.all([
+        apiGetClientSummary(id, token),
+        apiListPolicies(token),
+      ]);
+      setPolicies(clientData.policies ?? []);
+      setAvailablePolicies(policiesResponse.items ?? []);
+
+      setPolicyForm((prev) => ({ ...prev, type: "", premium: "", nextRenewal: "" }));
+      setPolicySuccess("Póliza creada y asociada al cliente.");
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : "No se pudo crear la póliza.");
     } finally {
       setPolicySaving(false);
     }
@@ -359,6 +413,102 @@ export default function VerCliente() {
                   ))}
                 </ul>
               )}
+            </div>
+
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="text-base font-semibold text-slate-800">Crear nueva póliza</h3>
+              <p className="text-sm text-slate-500">
+                Crea una póliza vinculada a una aseguradora y asignala directamente al cliente.
+              </p>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Aseguradora
+                  </label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    value={policyForm.insurerId}
+                    onChange={(event) => setPolicyForm((prev) => ({ ...prev, insurerId: event.target.value }))}
+                    disabled={insurers.length === 0}
+                  >
+                    <option value="">
+                      {insurers.length === 0 ? "No hay aseguradoras cargadas" : "Selecciona una aseguradora"}
+                    </option>
+                    {insurers.map((insurer) => (
+                      <option key={insurer.id} value={insurer.id}>
+                        {insurer.name ?? insurer.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Tipo de póliza
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    value={policyForm.type}
+                    onChange={(event) => setPolicyForm((prev) => ({ ...prev, type: event.target.value }))}
+                    placeholder="Ej: Hogar"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Estado
+                  </label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    value={policyForm.status}
+                    onChange={(event) => setPolicyForm((prev) => ({ ...prev, status: event.target.value }))}
+                  >
+                    {POLICY_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Prima (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    value={policyForm.premium}
+                    onChange={(event) => setPolicyForm((prev) => ({ ...prev, premium: event.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Próxima renovación
+                  </label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    value={policyForm.nextRenewal}
+                    onChange={(event) => setPolicyForm((prev) => ({ ...prev, nextRenewal: event.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs text-slate-500">
+                  Se agregará la póliza y quedará asociada al cliente actual.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCreatePolicy}
+                  disabled={isPolicySaving || !policyForm.insurerId}
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {isPolicySaving ? "Guardando…" : "Crear póliza"}
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-slate-200 pt-4">
