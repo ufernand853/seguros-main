@@ -111,7 +111,7 @@ const HELP_SECTIONS: HelpEntry[] = [
     },
   },
   {
-    match: startsWith("/clientes/ficha"),
+    match: (path) => path.includes("/clientes/") && path.endsWith("/ficha"),
     content: {
       title: "Ficha integral del cliente",
       summary: "Vista 360° con datos, pólizas vigentes, siniestros y documentos.",

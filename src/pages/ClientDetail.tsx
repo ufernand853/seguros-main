@@ -82,6 +82,13 @@ export default function ClientDetail() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => navigate(`/clientes/${encodeURIComponent(id)}/ficha`)}
+            className="px-4 py-2 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
+          >
+            Ver ficha integral
+          </button>
+          <button
+            type="button"
             onClick={() => navigate("/clientes/nuevo")}
             className="px-4 py-2 rounded-lg border border-slate-300 text-slate-800 hover:bg-slate-100 font-semibold"
           >

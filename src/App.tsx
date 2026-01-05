@@ -42,6 +42,7 @@ export default function App() {
       <Route path="/clientes" element={withLayout(<Clientes />)} />
       <Route path="/clientes/:id" element={withLayout(<ClientDetail />)} />
       <Route path="/clientes/:id/editar" element={withLayout(<VerCliente />)} />
+      <Route path="/clientes/:id/ficha" element={withLayout(<Client360View />)} />
       <Route path="/clientes/nuevo" element={withLayout(<NuevoCliente />)} />
       <Route path="/clientes/ficha" element={withLayout(<Client360View />)} />
       <Route path="/clientes/polizas" element={withLayout(<ClaimRegistration />)} />
