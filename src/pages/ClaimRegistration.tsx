@@ -2,11 +2,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import {
   apiCreateClaim,
+  apiCreatePolicy,
   apiListClaims,
   apiListClients,
+  apiListInsurers,
   type CreateClaimPayload,
   type ClaimItem,
   type ClientListItem,
+  type InsurerListItem,
   type PolicySummary,
 } from "../services/api";
 
@@ -30,6 +33,7 @@ type ClientWithPolicies = ClientListItem & { policies?: PolicySummary[] };
 const EVENT_TYPES = ["Automotor", "Hogar", "Accidentes personales", "Responsabilidad civil", "Garantía de alquiler"];
 const PRIORITIES = ["Alta", "Media", "Baja"];
 const NOTIFICATION_CHANNELS = ["WhatsApp", "Email", "Teléfono"];
+const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
 
 export default function ClaimRegistration() {
   const { token } = useAuth();
@@ -54,9 +58,17 @@ export default function ClaimRegistration() {
     notificarCliente: true,
     notificarProductor: true,
   });
+  const [policyForm, setPolicyForm] = useState({
+    type: EVENT_TYPES[0],
+    insurerId: "",
+    status: POLICY_STATUSES[0],
+    premium: "",
+    nextRenewal: "",
+  });
 
   const [clients, setClients] = useState<ClientWithPolicies[]>([]);
   const [claims, setClaims] = useState<ClaimRecord[]>([]);
+  const [insurers, setInsurers] = useState<InsurerListItem[]>([]);
   const [documentChecklist, setDocumentChecklist] = useState({
     fotos: true,
     denunciaPolicial: true,
@@ -67,8 +79,11 @@ export default function ClaimRegistration() {
 
   const [isLoadingData, setLoadingData] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
+  const [isCreatingPolicy, setCreatingPolicy] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [policySuccess, setPolicySuccess] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === claimForm.clienteId), [clients, claimForm.clienteId]);
   const policyOptions = selectedClient?.policies ?? [];
@@ -90,6 +105,30 @@ export default function ClaimRegistration() {
     return { total, ready };
   }, [documentChecklist]);
 
+  const syncFormWithClient = (clientsFromApi: ClientWithPolicies[]) => {
+    if (clientsFromApi.length === 0) {
+      setClaimForm((current) => ({ ...current, clienteId: "", asegurado: "", documento: "", contacto: "", telefono: "", poliza: "" }));
+      return;
+    }
+
+    setClaimForm((current) => {
+      const activeClient = clientsFromApi.find((client) => client.id === current.clienteId) ?? clientsFromApi[0];
+      const validPolicy = activeClient.policies?.some((policy) => policy.id === current.poliza)
+        ? current.poliza
+        : activeClient.policies?.[0]?.id ?? "";
+
+      return {
+        ...current,
+        clienteId: activeClient.id,
+        asegurado: activeClient.name,
+        documento: activeClient.document ?? "",
+        contacto: activeClient.contacts?.[0]?.email ?? "",
+        telefono: activeClient.contacts?.[0]?.phone ?? "",
+        poliza: validPolicy,
+      };
+    });
+  };
+
   const mapClaimFromApi = (item: ClaimItem): ClaimRecord => ({
     id: item.id,
     poliza: item.policy_id ?? null,
@@ -110,34 +149,28 @@ export default function ClaimRegistration() {
     setLoadingData(true);
     setError(null);
 
-    Promise.all([apiListClients(token), apiListClaims(token)])
-      .then(([clientsResponse, claimsResponse]) => {
+    Promise.all([apiListClients(token), apiListClaims(token), apiListInsurers(token)])
+      .then(([clientsResponse, claimsResponse, insurersResponse]) => {
         const clientsFromApi: ClientWithPolicies[] = (clientsResponse.items ?? []).map((item: ClientListItem) => ({
           ...item,
           policies: item.policies ?? [],
         }));
 
         setClients(clientsFromApi);
-
-        if (clientsFromApi.length > 0) {
-          const defaultClient = clientsFromApi[0];
-          setClaimForm((current) => ({
-            ...current,
-            clienteId: defaultClient.id,
-            asegurado: defaultClient.name,
-            documento: defaultClient.document ?? "",
-            contacto: defaultClient.contacts?.[0]?.email ?? "",
-            telefono: defaultClient.contacts?.[0]?.phone ?? "",
-            poliza: defaultClient.policies?.[0]?.id ?? "",
-          }));
-        }
+        syncFormWithClient(clientsFromApi);
 
         const mappedClaims = (claimsResponse.items ?? []).map((item: ClaimItem) => mapClaimFromApi(item));
         setClaims(mappedClaims);
+        setInsurers(insurersResponse.items ?? []);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los datos de siniestros"))
       .finally(() => setLoadingData(false));
   }, [token]);
+
+  useEffect(() => {
+    if (policyForm.insurerId || insurers.length === 0) return;
+    setPolicyForm((current) => ({ ...current, insurerId: insurers[0]?.id ?? "" }));
+  }, [insurers, policyForm.insurerId]);
 
   const toggleChecklist = (field: keyof typeof documentChecklist) => {
     setDocumentChecklist((current) => ({ ...current, [field]: !current[field] }));
@@ -154,6 +187,65 @@ export default function ClaimRegistration() {
       telefono: client?.contacts?.[0]?.phone ?? "",
       poliza: client?.policies?.[0]?.id ?? "",
     }));
+  };
+
+  const handleCreatePolicy = async () => {
+    setPolicyError(null);
+    setPolicySuccess(null);
+
+    if (!token) {
+      setPolicyError("Debes iniciar sesión para crear la póliza.");
+      return;
+    }
+
+    if (!claimForm.clienteId) {
+      setPolicyError("Selecciona un cliente antes de cargar la póliza.");
+      return;
+    }
+
+    if (!policyForm.type.trim() || !policyForm.insurerId) {
+      setPolicyError("Completa tipo de póliza y aseguradora.");
+      return;
+    }
+
+    setCreatingPolicy(true);
+
+    try {
+      await apiCreatePolicy(
+        {
+          type: policyForm.type.trim(),
+          insurer_id: policyForm.insurerId,
+          status: policyForm.status || null,
+          premium: policyForm.premium ? Number(policyForm.premium) : null,
+          next_renewal: policyForm.nextRenewal || null,
+          asegurados: [claimForm.clienteId],
+        },
+        token,
+      );
+
+      const clientsResponse = await apiListClients(token);
+      const clientsFromApi: ClientWithPolicies[] = (clientsResponse.items ?? []).map((item: ClientListItem) => ({
+        ...item,
+        policies: item.policies ?? [],
+      }));
+      setClients(clientsFromApi);
+      syncFormWithClient(clientsFromApi);
+
+      const insurerName = insurers.find((insurer) => insurer.id === policyForm.insurerId)?.name ?? "la aseguradora";
+      setPolicySuccess(`Póliza creada y asociada a ${insurerName}. Disponible para registrar siniestros.`);
+
+      setPolicyForm((current) => ({
+        ...current,
+        type: EVENT_TYPES[0],
+        status: POLICY_STATUSES[0],
+        premium: "",
+        nextRenewal: "",
+      }));
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : "No se pudo crear la póliza.");
+    } finally {
+      setCreatingPolicy(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -327,6 +419,115 @@ export default function ClaimRegistration() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 space-y-4">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-lg font-semibold text-slate-800">Alta de póliza asociada a aseguradora</h2>
+              <p className="text-sm text-slate-600">
+                Vincula la póliza con la aseguradora para que quede disponible al registrar siniestros y asociarla al cliente.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-type">
+                  Tipo de póliza
+                </label>
+                <input
+                  id="policy-type"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={policyForm.type}
+                  onChange={(event) => setPolicyForm((current) => ({ ...current, type: event.target.value }))}
+                  placeholder="Ej: Automotor, Hogar, Vida"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-insurer">
+                  Aseguradora
+                </label>
+                <select
+                  id="policy-insurer"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={policyForm.insurerId}
+                  onChange={(event) => setPolicyForm((current) => ({ ...current, insurerId: event.target.value }))}
+                  disabled={insurers.length === 0}
+                >
+                  {insurers.length === 0 && <option value="">No hay aseguradoras cargadas</option>}
+                  {insurers.map((insurer) => (
+                    <option key={insurer.id} value={insurer.id}>
+                      {insurer.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-status">
+                  Estado
+                </label>
+                <select
+                  id="policy-status"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={policyForm.status}
+                  onChange={(event) => setPolicyForm((current) => ({ ...current, status: event.target.value }))}
+                >
+                  {POLICY_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-premium">
+                  Prima
+                </label>
+                <input
+                  id="policy-premium"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={policyForm.premium}
+                  onChange={(event) => setPolicyForm((current) => ({ ...current, premium: event.target.value }))}
+                  placeholder="Ej: 4500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-renewal">
+                  Próxima renovación
+                </label>
+                <input
+                  id="policy-renewal"
+                  type="date"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={policyForm.nextRenewal}
+                  onChange={(event) => setPolicyForm((current) => ({ ...current, nextRenewal: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-sm text-slate-500">
+                Cliente seleccionado: {selectedClient?.name ?? "Selecciona un cliente para asociar la póliza."}
+              </div>
+              <button
+                type="button"
+                onClick={handleCreatePolicy}
+                disabled={isCreatingPolicy || !claimForm.clienteId}
+                className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {isCreatingPolicy ? "Guardando…" : "Crear póliza"}
+              </button>
+            </div>
+            {policyError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{policyError}</p>
+            )}
+            {policySuccess && (
+              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                {policySuccess}
+              </p>
+            )}
           </div>
 
           <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 space-y-4">
