@@ -10,6 +10,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { logout } = useAuth();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const helpContent = useHelpContent();
+  const sectionTitle = getSectionTitle(location.pathname);
 
   useEffect(() => {
     setIsHelpOpen(false);
@@ -18,7 +19,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Barra superior */}
-      <div className="flex items-center justify-between px-4 py-3 bg-white shadow-md">
+      <div className="flex items-center gap-4 px-4 py-3 bg-white shadow-md">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -27,6 +28,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           >
             Dashboard
           </button>
+        </div>
+        <div className="flex-1 text-center min-w-0">
+          <span className="text-lg font-semibold text-slate-700 truncate">
+            {sectionTitle}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -58,4 +64,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       />
     </div>
   );
+}
+
+function getSectionTitle(pathname: string) {
+  if (pathname.startsWith("/clientes/polizas")) return "Pólizas";
+  if (pathname.startsWith("/clientes")) return "Clientes";
+  if (pathname.startsWith("/pipeline")) return "Pólizas";
+  if (pathname.startsWith("/produccion")) return "Producción & comisiones";
+  if (pathname.startsWith("/renovaciones")) return "Agenda de renovaciones";
+  if (pathname.startsWith("/gestiones")) return "Seguimiento de gestiones";
+  if (pathname.startsWith("/aseguradoras")) return "Aseguradoras";
+  if (pathname.startsWith("/siniestros")) return "Siniestros";
+  if (pathname.startsWith("/configuracion")) return "Configuración";
+  if (pathname.startsWith("/dashboard")) return "Dashboard";
+  return "Sección";
 }
