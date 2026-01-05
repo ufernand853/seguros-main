@@ -138,6 +138,7 @@ export type PolicySummary = {
   status?: string | null;
   premium?: number | null;
   next_renewal?: string | null;
+  roles?: string[];
 };
 
 export async function apiListClients(accessToken: string): Promise<{ items: ClientListItem[] }> {

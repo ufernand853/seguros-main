@@ -4,6 +4,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { closeConnection, connectToDatabase, getDb } from "./db.js";
+import { POLICY_ROLE_KEYS, buildPolicyRoleEntries, normalizeRoleAssignments } from "./policyRoles.js";
 
 const PORT = process.env.PORT || 4000;
 const ACCESS_TTL_SECONDS = Number(process.env.ACCESS_TTL_SECONDS || 60 * 60 * 2); // 2h
@@ -33,6 +34,16 @@ function mapDocument(doc) {
   if (!doc) return null;
   const { _id, ...rest } = doc;
   return { id: String(_id), ...rest };
+}
+
+function mapClientSummary(client) {
+  if (!client) return null;
+  return {
+    id: String(client._id),
+    name: client.name ?? null,
+    document: client.document ?? null,
+    city: client.city ?? null,
+  };
 }
 
 const TASK_STATUSES = new Set(["pendiente", "en_curso", "completada"]);
@@ -124,6 +135,66 @@ async function getUserByEmail(email) {
 async function getUserById(id) {
   const db = getDb();
   return db.collection("users").findOne({ _id: String(id) }, { projection: { _id: 1, name: 1, email: 1, role: 1 } });
+}
+
+async function ensureClientsExist(clientIds) {
+  if (!clientIds.length) return { ok: true, missing: [] };
+  const db = getDb();
+  const rows = await db.collection("clients").find({ _id: { $in: clientIds } }, { projection: { _id: 1 } }).toArray();
+  const foundIds = new Set(rows.map((row) => row._id));
+  const missing = clientIds.filter((id) => !foundIds.has(id));
+  return { ok: missing.length === 0, missing };
+}
+
+async function fetchPolicyRoleAssignments(policyId) {
+  const db = getDb();
+  const rows = await db.collection("policy_clients").find({ policy_id: policyId }).toArray();
+  const assignments = {
+    asegurados: [],
+    tomadores: [],
+    cesionarios: [],
+  };
+
+  for (const row of rows) {
+    const roleKey = POLICY_ROLE_KEYS[row.role];
+    if (!roleKey) continue;
+    assignments[roleKey].push(row.client_id);
+  }
+
+  return assignments;
+}
+
+async function hydratePoliciesWithRoles(policies) {
+  if (!policies.length) return [];
+  const db = getDb();
+  const policyIds = policies.map((policy) => policy._id);
+  const roleRows = await db.collection("policy_clients").find({ policy_id: { $in: policyIds } }).toArray();
+  const clientIds = Array.from(new Set(roleRows.map((row) => row.client_id)));
+  const clients = clientIds.length
+    ? await db.collection("clients").find({ _id: { $in: clientIds } }).toArray()
+    : [];
+  const clientsById = clients.reduce((acc, client) => {
+    acc[client._id] = mapClientSummary(client);
+    return acc;
+  }, {});
+
+  const rolesByPolicy = policyIds.reduce((acc, policyId) => {
+    acc[policyId] = { asegurados: [], tomadores: [], cesionarios: [] };
+    return acc;
+  }, {});
+
+  for (const row of roleRows) {
+    const roleKey = POLICY_ROLE_KEYS[row.role];
+    const client = clientsById[row.client_id];
+    if (!roleKey || !client) continue;
+    const entry = rolesByPolicy[row.policy_id];
+    if (entry) entry[roleKey].push(client);
+  }
+
+  return policies.map((policy) => ({
+    ...mapDocument(policy),
+    roles: rolesByPolicy[policy._id] ?? { asegurados: [], tomadores: [], cesionarios: [] },
+  }));
 }
 
 async function authenticate(req, res, next) {
@@ -253,19 +324,26 @@ api.get("/clients", authenticate, async (_req, res) => {
       .sort({ created_at: -1 })
       .toArray();
 
+    const clientIds = items.map((client) => client._id);
+    const policyLinks = clientIds.length
+      ? await db.collection("policy_clients").find({ client_id: { $in: clientIds } }).toArray()
+      : [];
+    const policyIds = Array.from(new Set(policyLinks.map((link) => link.policy_id)));
+    const policyDocs = policyIds.length
+      ? await db.collection("policies").find({ _id: { $in: policyIds } }).toArray()
+      : [];
+    const policiesById = policyDocs.reduce((acc, policy) => {
+      acc[policy._id] = policy;
+      return acc;
+    }, {});
+
     const insurerIds = Array.from(
       new Set(
-        items
-          .flatMap((client) => (client.policies ?? []).map((policy) => policy.insurer_id))
-          .filter((id) => typeof id === "string"),
+        policyDocs.map((policy) => policy.insurer_id).filter((id) => typeof id === "string"),
       ),
     );
-
     const insurersLookup = insurerIds.length
-      ? await db
-          .collection("insurers")
-          .find({ _id: { $in: insurerIds } })
-          .toArray()
+      ? await db.collection("insurers").find({ _id: { $in: insurerIds } }).toArray()
       : [];
 
     const insurersById = insurersLookup.reduce((acc, row) => {
@@ -273,12 +351,42 @@ api.get("/clients", authenticate, async (_req, res) => {
       return acc;
     }, {});
 
+    const rolesByClientPolicy = policyLinks.reduce((acc, link) => {
+      const key = `${link.client_id}:${link.policy_id}`;
+      if (!acc[key]) acc[key] = new Set();
+      acc[key].add(link.role);
+      return acc;
+    }, {});
+
+    const policiesByClient = policyLinks.reduce((acc, link) => {
+      const policy = policiesById[link.policy_id];
+      if (!policy) return acc;
+      if (!acc[link.client_id]) acc[link.client_id] = new Map();
+      if (!acc[link.client_id].has(link.policy_id)) {
+        const rolesKey = `${link.client_id}:${link.policy_id}`;
+        acc[link.client_id].set(link.policy_id, {
+          id: String(policy._id),
+          type: policy.type ?? null,
+          insurer_id: policy.insurer_id ?? null,
+          insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+          status: policy.status ?? null,
+          premium: typeof policy.premium === "number" ? policy.premium : null,
+          next_renewal: policy.next_renewal ?? null,
+          roles: rolesByClientPolicy[rolesKey] ? Array.from(rolesByClientPolicy[rolesKey]) : [],
+        });
+      }
+      return acc;
+    }, {});
+
     const clients = items.map((client) => ({
       ...mapDocument(client),
-      policies: (client.policies ?? []).map((policy) => ({
-        ...policy,
-        insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
-      })),
+      policies: policiesByClient[client._id]
+        ? Array.from(policiesByClient[client._id].values())
+        : (client.policies ?? []).map((policy) => ({
+            ...policy,
+            insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+            roles: [],
+          })),
     }));
 
     res.json({ items: clients });
@@ -302,15 +410,29 @@ async function aggregateClaims(filter = {}) {
     },
     { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
     {
+      $lookup: {
+        from: "policies",
+        localField: "policy_id",
+        foreignField: "_id",
+        as: "policy_doc",
+      },
+    },
+    { $unwind: { path: "$policy_doc", preserveNullAndEmptyArrays: true } },
+    {
       $set: {
         policy: {
-          $first: {
-            $filter: {
-              input: "$client.policies",
-              as: "policy",
-              cond: { $eq: ["$$policy.id", "$policy_id"] },
+          $ifNull: [
+            "$policy_doc",
+            {
+              $first: {
+                $filter: {
+                  input: "$client.policies",
+                  as: "policy",
+                  cond: { $eq: ["$$policy.id", "$policy_id"] },
+                },
+              },
             },
-          },
+          ],
         },
       },
     },
@@ -404,8 +526,16 @@ api.post("/claims", authenticate, async (req, res) => {
     const client = await db.collection("clients").findOne({ _id: client_id });
     if (!client) return res.status(404).json({ error: "Cliente no encontrado" });
 
-    const policy = (client.policies ?? []).find((p) => p.id === policy_id);
-    if (!policy) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
+    const policyDoc = await db.collection("policies").findOne({ _id: policy_id });
+    let policy = policyDoc;
+
+    if (policyDoc) {
+      const link = await db.collection("policy_clients").findOne({ policy_id, client_id });
+      if (!link) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
+    } else {
+      policy = (client.policies ?? []).find((p) => p.id === policy_id);
+      if (!policy) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
+    }
 
     const claimDoc = {
       _id: randomUUID(),
@@ -502,14 +632,22 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
     const clientDoc = await db.collection("clients").findOne({ _id: clientId });
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
 
-    const insurerIds = (clientDoc.policies ?? [])
-      .map((p) => p.insurer_id)
-      .filter((id) => typeof id === "string");
+    const policyLinks = await db.collection("policy_clients").find({ client_id: clientId }).toArray();
+    const policyIds = Array.from(new Set(policyLinks.map((link) => link.policy_id)));
+    const policyDocs = policyIds.length
+      ? await db.collection("policies").find({ _id: { $in: policyIds } }).toArray()
+      : [];
+    const policiesById = policyDocs.reduce((acc, policy) => {
+      acc[policy._id] = policy;
+      return acc;
+    }, {});
+    const insurerIds = Array.from(
+      new Set(
+        policyDocs.map((policy) => policy.insurer_id).filter((id) => typeof id === "string"),
+      ),
+    );
     const insurersLookup = insurerIds.length
-      ? await db
-          .collection("insurers")
-          .find({ _id: { $in: insurerIds } })
-          .toArray()
+      ? await db.collection("insurers").find({ _id: { $in: insurerIds } }).toArray()
       : [];
 
     const insurersById = insurersLookup.reduce((acc, row) => {
@@ -561,10 +699,36 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
     const tasksMapped = tasks.map(mapDocument);
     const nextTask = tasksMapped.find((t) => t.status !== "completada") || null;
 
-    const policies = (clientDoc.policies ?? []).map((policy) => ({
-      ...policy,
-      insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
-    }));
+    const rolesByPolicy = policyLinks.reduce((acc, link) => {
+      if (!acc[link.policy_id]) acc[link.policy_id] = new Set();
+      acc[link.policy_id].add(link.role);
+      return acc;
+    }, {});
+
+    const policies = policyLinks.length
+      ? Array.from(
+          policyLinks.reduce((acc, link) => {
+            const policy = policiesById[link.policy_id];
+            if (!policy || acc.has(link.policy_id)) return acc;
+            acc.set(link.policy_id, {
+              id: String(policy._id),
+              type: policy.type ?? null,
+              insurer_id: policy.insurer_id ?? null,
+              insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+              status: policy.status ?? null,
+              premium: typeof policy.premium === "number" ? policy.premium : null,
+              next_renewal: policy.next_renewal ?? null,
+              roles: rolesByPolicy[link.policy_id] ? Array.from(rolesByPolicy[link.policy_id]) : [],
+            });
+            return acc;
+          }, new Map())
+          .values(),
+        )
+      : (clientDoc.policies ?? []).map((policy) => ({
+          ...policy,
+          insurer: policy.insurer_id ? insurersById[policy.insurer_id]?.name ?? null : null,
+          roles: [],
+        }));
 
     res.json({
       ...mapDocument(clientDoc),
@@ -592,6 +756,7 @@ api.delete("/clients/:id", authenticate, requireAdmin, async (req, res) => {
       db.collection("pipeline").deleteMany({ client_id: clientId }),
       db.collection("renewals").deleteMany({ client_id: clientId }),
       db.collection("claims").deleteMany({ client_id: clientId }),
+      db.collection("policy_clients").deleteMany({ client_id: clientId }),
     ]);
 
     res.json({ ok: true });
@@ -605,19 +770,167 @@ api.delete("/clients/:clientId/policies/:policyId", authenticate, requireAdmin, 
   const { clientId, policyId } = req.params;
   try {
     const db = getDb();
-    const updated = await db
-      .collection("clients")
-      .findOneAndUpdate(
-        { _id: clientId, "policies.id": policyId },
-        { $pull: { policies: { id: policyId } } },
-        { returnDocument: "after" },
-      );
+    const updated = await db.collection("clients").findOneAndUpdate(
+      { _id: clientId, "policies.id": policyId },
+      { $pull: { policies: { id: policyId } } },
+      { returnDocument: "after" },
+    );
 
-    if (!updated?.value) return res.status(404).json({ error: "Póliza no encontrada para el cliente" });
+    const [linksDeleted] = await Promise.all([
+      db.collection("policy_clients").deleteMany({ client_id: clientId, policy_id: policyId }),
+      db.collection("claims").deleteMany({ client_id: clientId, policy_id: policyId }),
+    ]);
 
-    await db.collection("claims").deleteMany({ client_id: clientId, policy_id: policyId });
+    if (!updated?.value && !linksDeleted?.deletedCount) {
+      return res.status(404).json({ error: "Póliza no encontrada para el cliente" });
+    }
 
     res.json({ client: mapDocument(updated.value) });
+  } catch (err) {
+    console.error("[policies delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar la póliza" });
+  }
+});
+
+api.get("/policies", authenticate, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db.collection("policies").find({}).sort({ created_at: -1 }).toArray();
+    const items = await hydratePoliciesWithRoles(rows);
+    res.json({ items });
+  } catch (err) {
+    console.error("[policies]", err);
+    res.status(500).json({ error: "No se pudieron recuperar las pólizas" });
+  }
+});
+
+api.get("/policies/:id", authenticate, async (req, res) => {
+  const policyId = req.params.id;
+  try {
+    const db = getDb();
+    const row = await db.collection("policies").findOne({ _id: policyId });
+    if (!row) return res.status(404).json({ error: "Póliza no encontrada" });
+    const [item] = await hydratePoliciesWithRoles([row]);
+    res.json(item);
+  } catch (err) {
+    console.error("[policies detail]", err);
+    res.status(500).json({ error: "No se pudo recuperar la póliza" });
+  }
+});
+
+api.post("/policies", authenticate, async (req, res) => {
+  const { type, insurer_id, status, premium, next_renewal, asegurados, tomadores, cesionarios } = req.body || {};
+
+  const policyDoc = {
+    _id: randomUUID(),
+    type: type ?? null,
+    insurer_id: insurer_id ?? null,
+    status: status ?? null,
+    premium: typeof premium === "number" ? premium : null,
+    next_renewal: next_renewal ? new Date(next_renewal) : null,
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+
+  const roleAssignments = normalizeRoleAssignments({ asegurados, tomadores, cesionarios });
+  const roleEntries = buildPolicyRoleEntries(policyDoc._id, roleAssignments);
+  const clientIds = Array.from(new Set(roleEntries.map((entry) => entry.client_id)));
+
+  try {
+    const db = getDb();
+    const { ok, missing } = await ensureClientsExist(clientIds);
+    if (!ok) {
+      return res.status(400).json({ error: `Clientes no encontrados: ${missing.join(", ")}` });
+    }
+
+    await db.collection("policies").insertOne(policyDoc);
+    if (roleEntries.length) {
+      await db.collection("policy_clients").insertMany(
+        roleEntries.map((entry) => ({
+          _id: randomUUID(),
+          ...entry,
+          created_at: new Date(),
+        })),
+      );
+    }
+
+    const [item] = await hydratePoliciesWithRoles([policyDoc]);
+    res.status(201).json(item);
+  } catch (err) {
+    console.error("[policies create]", err);
+    res.status(500).json({ error: "No se pudo crear la póliza" });
+  }
+});
+
+api.put("/policies/:id", authenticate, async (req, res) => {
+  const policyId = req.params.id;
+  const { type, insurer_id, status, premium, next_renewal, asegurados, tomadores, cesionarios } = req.body || {};
+  const hasRoleUpdates = ["asegurados", "tomadores", "cesionarios"].some((key) => key in (req.body || {}));
+
+  try {
+    const db = getDb();
+    const existing = await db.collection("policies").findOne({ _id: policyId });
+    if (!existing) return res.status(404).json({ error: "Póliza no encontrada" });
+
+    if (hasRoleUpdates) {
+      const requestedAssignments = normalizeRoleAssignments({ asegurados, tomadores, cesionarios });
+      const currentAssignments = await fetchPolicyRoleAssignments(policyId);
+      const roleAssignments = {
+        asegurados: "asegurados" in req.body ? requestedAssignments.asegurados : currentAssignments.asegurados,
+        tomadores: "tomadores" in req.body ? requestedAssignments.tomadores : currentAssignments.tomadores,
+        cesionarios: "cesionarios" in req.body ? requestedAssignments.cesionarios : currentAssignments.cesionarios,
+      };
+      const roleEntries = buildPolicyRoleEntries(policyId, roleAssignments);
+      const clientIds = Array.from(new Set(roleEntries.map((entry) => entry.client_id)));
+      const { ok, missing } = await ensureClientsExist(clientIds);
+      if (!ok) {
+        return res.status(400).json({ error: `Clientes no encontrados: ${missing.join(", ")}` });
+      }
+
+      await db.collection("policy_clients").deleteMany({ policy_id: policyId });
+      if (roleEntries.length) {
+        await db.collection("policy_clients").insertMany(
+          roleEntries.map((entry) => ({
+            _id: randomUUID(),
+            ...entry,
+            created_at: new Date(),
+          })),
+        );
+      }
+    }
+
+    const update = { updated_at: new Date() };
+    if ("type" in req.body) update.type = type ?? null;
+    if ("insurer_id" in req.body) update.insurer_id = insurer_id ?? null;
+    if ("status" in req.body) update.status = status ?? null;
+    if ("premium" in req.body) update.premium = typeof premium === "number" ? premium : null;
+    if ("next_renewal" in req.body) update.next_renewal = next_renewal ? new Date(next_renewal) : null;
+
+    const updated = await db
+      .collection("policies")
+      .findOneAndUpdate({ _id: policyId }, { $set: update }, { returnDocument: "after" });
+
+    const [item] = await hydratePoliciesWithRoles([updated.value]);
+    res.json(item);
+  } catch (err) {
+    console.error("[policies update]", err);
+    res.status(500).json({ error: "No se pudo actualizar la póliza" });
+  }
+});
+
+api.delete("/policies/:id", authenticate, requireAdmin, async (req, res) => {
+  const policyId = req.params.id;
+  try {
+    const db = getDb();
+    const deleted = await db.collection("policies").findOneAndDelete({ _id: policyId });
+    if (!deleted?.value) return res.status(404).json({ error: "Póliza no encontrada" });
+
+    await Promise.all([
+      db.collection("policy_clients").deleteMany({ policy_id: policyId }),
+      db.collection("claims").deleteMany({ policy_id: policyId }),
+    ]);
+
+    res.json({ ok: true });
   } catch (err) {
     console.error("[policies delete]", err);
     res.status(500).json({ error: "No se pudo eliminar la póliza" });
@@ -1001,6 +1314,7 @@ api.delete("/insurers/:id", authenticate, requireAdmin, async (req, res) => {
         { $set: { "policies.$[policy].insurer_id": null } },
         { arrayFilters: [{ "policy.insurer_id": insurerId }] },
       ),
+      db.collection("policies").updateMany({ insurer_id: insurerId }, { $set: { insurer_id: null } }),
       db.collection("claims").updateMany({ insurer_id: insurerId }, { $set: { insurer_id: null } }),
     ]);
 
