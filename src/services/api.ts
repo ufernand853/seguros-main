@@ -340,6 +340,40 @@ export type InsurerListItem = {
   created_at?: string;
 };
 
+export type PolicyRoleClient = {
+  id: string;
+  name?: string | null;
+  document?: string | null;
+  city?: string | null;
+};
+
+export type PolicyRoles = {
+  asegurados: PolicyRoleClient[];
+  tomadores: PolicyRoleClient[];
+  cesionarios: PolicyRoleClient[];
+};
+
+export type PolicyItem = {
+  id: string;
+  type?: string | null;
+  insurer_id?: string | null;
+  status?: string | null;
+  premium?: number | null;
+  next_renewal?: string | null;
+  roles?: PolicyRoles;
+};
+
+export type CreatePolicyPayload = {
+  type?: string | null;
+  insurer_id?: string | null;
+  status?: string | null;
+  premium?: number | null;
+  next_renewal?: string | null;
+  asegurados?: string[];
+  tomadores?: string[];
+  cesionarios?: string[];
+};
+
 export type CreateInsurerPayload = {
   name: string;
   country?: string | null;
@@ -381,6 +415,40 @@ export async function apiUpdateInsurer(
 ): Promise<InsurerListItem> {
   return request(`/insurers/${insurerId}`, {
     method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiListPolicies(accessToken: string): Promise<{ items: PolicyItem[] }> {
+  return request("/policies", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiCreatePolicy(payload: CreatePolicyPayload, accessToken: string): Promise<PolicyItem> {
+  return request("/policies", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdatePolicy(
+  policyId: string,
+  payload: CreatePolicyPayload,
+  accessToken: string,
+): Promise<PolicyItem> {
+  return request(`/policies/${policyId}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
