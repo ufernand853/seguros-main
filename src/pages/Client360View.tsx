@@ -3,54 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { apiGetClientSummary, type ClientSummary } from "../services/api";
 
-const CLAIM_STAGES = [
-  { etapa: "Ingreso", fecha: "2024-03-01", detalle: "Denuncia por choque leve en Av. Demo" },
-  { etapa: "Inspección", fecha: "2024-03-03", detalle: "Inspección fotográfica enviada a la aseguradora" },
-  { etapa: "Carta de cobertura", fecha: "2024-03-05", detalle: "Carta emitida y enviada al cliente" },
-  { etapa: "Pago", fecha: "2024-03-12", detalle: "Pago de reparación autorizado" },
-];
-
-const RENEWAL_ALERTS = [
-  { producto: "Garantía Alquiler", fecha: "2024-05-10", responsable: "Equipo Comercial" },
-  { producto: "Seguro Auto", fecha: "2024-06-22", responsable: "Backoffice" },
-  { producto: "Seguro Viajero", fecha: "2024-07-12", responsable: "Productor" },
-];
-
-const POLICY_MOVEMENTS = [
-  { fecha: "2024-03-14", detalle: "Cambio de suma asegurada en Seguro Auto" },
-  { fecha: "2024-02-20", detalle: "Actualización de datos bancarios para débito automático" },
-  { fecha: "2024-01-15", detalle: "Renovación automática de Garantía de Alquiler" },
-];
-
-const DOUBLE_COVERAGE = [
-  {
-    vehiculo: "SUV - MAT 2323",
-    coberturaPrincipal: "Seguro Auto Porto",
-    coberturaTemporal: "Seguro Auto Sura (cobertura puente por siniestro)",
-    notas: "Ambas vigentes por 15 días, verificar cancelación automática",
-  },
-];
-
-const INSURANCE_TYPES = [
-  "Agro",
-  "Viajero",
-  "Importación",
-  "Fianza",
-  "Vida Colectivo",
-  "Salud Internacional",
-];
-
-const EMISSION_REQUIREMENTS = {
-  previos: [
-    "Formulario de solicitud firmado",
-    "Documento del titular y co-titulares",
-    "Informe de ingresos / balances",
-  ],
-  posteriores: [
-    "Póliza emitida y firmada",
-    "Constancia de envío a cliente",
-    "Documentación bancaria actualizada",
-  ],
+type ClaimStage = { etapa: string; fecha: string; detalle: string };
+type RenewalAlert = { producto: string; fecha: string; responsable: string };
+type PolicyMovement = { fecha: string; detalle: string };
+type DoubleCoverageItem = {
+  vehiculo: string;
+  coberturaPrincipal: string;
+  coberturaTemporal: string;
+  notas: string;
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -113,6 +73,25 @@ export default function Client360View() {
   }));
 
   const claimRegistrations = [];
+  const claimStages: ClaimStage[] = [];
+  const renewalAlerts: RenewalAlert[] = client?.renewal
+    ? [
+        {
+          producto: client.renewal.policy_number ?? "Renovación pendiente",
+          fecha: formatDate(client.renewal.renewal_date),
+          responsable: client.renewal.owner ?? "Sin responsable asignado",
+        },
+      ]
+    : [];
+  const policyMovements: PolicyMovement[] = [];
+  const doubleCoverage: DoubleCoverageItem[] = [];
+  const insuranceTypes = Array.from(
+    new Set((client?.policies ?? []).map((policy) => policy.type).filter(Boolean)),
+  ) as string[];
+  const emissionRequirements = {
+    previos: [] as string[],
+    posteriores: [] as string[],
+  };
 
   const actionCards = useMemo(
     () => [
@@ -251,19 +230,23 @@ export default function Client360View() {
           <p className="mt-1 text-sm text-slate-600">
             Control de hitos clave según el ramo del seguro.
           </p>
-          <ol className="mt-4 space-y-4">
-            {CLAIM_STAGES.map((stage, index) => (
-              <li key={stage.etapa} className="relative pl-6">
-                {index !== CLAIM_STAGES.length - 1 && (
-                  <span className="absolute left-2 top-6 bottom-[-1rem] w-px bg-emerald-200" aria-hidden />
-                )}
-                <span className="absolute left-0 top-1.5 inline-flex h-3 w-3 rounded-full bg-emerald-500" aria-hidden />
-                <div className="text-sm font-semibold text-slate-900">{stage.etapa}</div>
-                <div className="text-xs text-slate-500">{stage.fecha}</div>
-                <div className="mt-1 text-sm text-slate-700">{stage.detalle}</div>
-              </li>
-            ))}
-          </ol>
+          {claimStages.length ? (
+            <ol className="mt-4 space-y-4">
+              {claimStages.map((stage, index) => (
+                <li key={`${stage.etapa}-${stage.fecha}-${index}`} className="relative pl-6">
+                  {index !== claimStages.length - 1 && (
+                    <span className="absolute left-2 top-6 bottom-[-1rem] w-px bg-emerald-200" aria-hidden />
+                  )}
+                  <span className="absolute left-0 top-1.5 inline-flex h-3 w-3 rounded-full bg-emerald-500" aria-hidden />
+                  <div className="text-sm font-semibold text-slate-900">{stage.etapa}</div>
+                  <div className="text-xs text-slate-500">{stage.fecha}</div>
+                  <div className="mt-1 text-sm text-slate-700">{stage.detalle}</div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">No hay etapas de siniestro cargadas para este cliente.</p>
+          )}
         </div>
 
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
@@ -271,17 +254,21 @@ export default function Client360View() {
           <p className="mt-1 text-sm text-slate-600">
             Alertas configuradas por fecha para anticipar gestiones.
           </p>
-          <ul className="mt-4 space-y-3">
-            {RENEWAL_ALERTS.map((item) => (
-              <li key={item.producto} className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
-                <div>
-                  <div className="font-semibold text-slate-900">{item.producto}</div>
-                  <div className="text-xs text-slate-500">Responsable: {item.responsable}</div>
-                </div>
-                <div className="text-sm font-medium text-emerald-600">{item.fecha}</div>
-              </li>
-            ))}
-          </ul>
+          {renewalAlerts.length ? (
+            <ul className="mt-4 space-y-3">
+              {renewalAlerts.map((item) => (
+                <li key={item.producto} className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
+                  <div>
+                    <div className="font-semibold text-slate-900">{item.producto}</div>
+                    <div className="text-xs text-slate-500">Responsable: {item.responsable}</div>
+                  </div>
+                  <div className="text-sm font-medium text-emerald-600">{item.fecha}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">No hay recordatorios de renovación cargados.</p>
+          )}
         </div>
       </section>
 
@@ -314,14 +301,18 @@ export default function Client360View() {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
           <h2 className="text-lg font-semibold text-slate-800">Movimientos recientes en pólizas</h2>
-          <ul className="mt-4 space-y-3">
-            {POLICY_MOVEMENTS.map((movement) => (
-              <li key={movement.detalle} className="rounded-xl border border-slate-100 px-4 py-3 bg-slate-50">
-                <div className="text-xs font-semibold text-slate-500">{movement.fecha}</div>
-                <div className="text-sm text-slate-800">{movement.detalle}</div>
-              </li>
-            ))}
-          </ul>
+          {policyMovements.length ? (
+            <ul className="mt-4 space-y-3">
+              {policyMovements.map((movement) => (
+                <li key={`${movement.detalle}-${movement.fecha}`} className="rounded-xl border border-slate-100 px-4 py-3 bg-slate-50">
+                  <div className="text-xs font-semibold text-slate-500">{movement.fecha}</div>
+                  <div className="text-sm text-slate-800">{movement.detalle}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">No hay movimientos recientes registrados.</p>
+          )}
         </div>
 
         <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
@@ -329,16 +320,20 @@ export default function Client360View() {
           <p className="mt-1 text-sm text-slate-600">
             Controlamos duplicidades y particularidades del vehículo asegurado.
           </p>
-          <ul className="mt-4 space-y-3">
-            {DOUBLE_COVERAGE.map((item) => (
-              <li key={item.vehiculo} className="rounded-xl border border-slate-100 px-4 py-3">
-                <div className="text-sm font-semibold text-slate-900">{item.vehiculo}</div>
-                <div className="text-xs text-slate-500">Principal: {item.coberturaPrincipal}</div>
-                <div className="text-xs text-slate-500">Temporal: {item.coberturaTemporal}</div>
-                <div className="mt-2 text-sm text-slate-700">{item.notas}</div>
-              </li>
-            ))}
-          </ul>
+          {doubleCoverage.length ? (
+            <ul className="mt-4 space-y-3">
+              {doubleCoverage.map((item) => (
+                <li key={`${item.vehiculo}-${item.coberturaPrincipal}`} className="rounded-xl border border-slate-100 px-4 py-3">
+                  <div className="text-sm font-semibold text-slate-900">{item.vehiculo}</div>
+                  <div className="text-xs text-slate-500">Principal: {item.coberturaPrincipal}</div>
+                  <div className="text-xs text-slate-500">Temporal: {item.coberturaTemporal}</div>
+                  <div className="mt-2 text-sm text-slate-700">{item.notas}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">No hay coberturas especiales registradas.</p>
+          )}
         </div>
       </section>
 
@@ -348,33 +343,41 @@ export default function Client360View() {
           <p className="mt-1 text-sm text-slate-600">
             Catálogo preparado para cruzar oportunidades según rubro.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {INSURANCE_TYPES.map((type) => (
-              <span key={type} className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-                {type}
-              </span>
-            ))}
-          </div>
+          {insuranceTypes.length ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {insuranceTypes.map((type) => (
+                <span key={type} className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                  {type}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">No hay tipos de seguros asociados al cliente.</p>
+          )}
         </div>
       </section>
 
       <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-slate-800">Emisión y documentación</h2>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {([
-            { titulo: "Previo a la emisión", items: EMISSION_REQUIREMENTS.previos },
-            { titulo: "Post emisión", items: EMISSION_REQUIREMENTS.posteriores },
-          ] as const).map((block) => (
-            <div key={block.titulo} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <h3 className="text-sm font-semibold text-slate-800">{block.titulo}</h3>
-              <ul className="mt-3 space-y-2 text-sm text-slate-700 list-disc list-inside">
-                {block.items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        {emissionRequirements.previos.length || emissionRequirements.posteriores.length ? (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {([
+              { titulo: "Previo a la emisión", items: emissionRequirements.previos },
+              { titulo: "Post emisión", items: emissionRequirements.posteriores },
+            ] as const).map((block) => (
+              <div key={block.titulo} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <h3 className="text-sm font-semibold text-slate-800">{block.titulo}</h3>
+                <ul className="mt-3 space-y-2 text-sm text-slate-700 list-disc list-inside">
+                  {block.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">No hay checklist de emisión disponible para este cliente.</p>
+        )}
       </section>
     </div>
   );
