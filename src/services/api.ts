@@ -331,8 +331,11 @@ export type InsurerListItem = {
   status?: string | null;
   rating?: number | null;
   annual_premium?: number | null;
+  annual_premium_usd?: number | null;
+  annual_premium_pesos?: number | null;
   active_policies?: number | null;
   loss_ratio?: number | null;
+  bcu_exchange_rate?: number | null;
   contact?: { name?: string | null; email?: string | null; phone?: string | null } | null;
   key_deals?: string[];
   last_review?: string | null;
@@ -381,8 +384,11 @@ export type CreateInsurerPayload = {
   status?: string | null;
   rating?: number | null;
   annual_premium?: number | null;
+  annual_premium_usd?: number | null;
+  annual_premium_pesos?: number | null;
   active_policies?: number | null;
   loss_ratio?: number | null;
+  bcu_exchange_rate?: number | null;
   contact?: { name?: string | null; email?: string | null; phone?: string | null } | null;
   key_deals?: string[];
   last_review?: string | null;

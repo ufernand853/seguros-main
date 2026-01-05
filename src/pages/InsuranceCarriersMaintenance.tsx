@@ -25,9 +25,11 @@ type Carrier = {
   ramos: string[];
   estado: "Activa" | "En revisión" | "Suspendida";
   calificacion: number;
-  primasAnuales: number;
+  primasAnualesUsd: number;
+  primasAnualesPesos: number;
   polizasVigentes: number;
   siniestralidad: number;
+  tcBancoCentral: number;
   contacto: Contact;
   acuerdosClaves: string[];
   ultimaActualizacion: string | null;
@@ -61,9 +63,11 @@ function mapApiInsurerToCarrier(insurer: InsurerListItem): Carrier {
     ramos: insurer.lines ?? [],
     estado: parseEstado(insurer.status),
     calificacion: insurer.rating ?? 0,
-    primasAnuales: insurer.annual_premium ?? 0,
+    primasAnualesUsd: insurer.annual_premium_usd ?? insurer.annual_premium ?? 0,
+    primasAnualesPesos: insurer.annual_premium_pesos ?? 0,
     polizasVigentes: insurer.active_policies ?? 0,
     siniestralidad: insurer.loss_ratio ?? 0,
+    tcBancoCentral: insurer.bcu_exchange_rate ?? 0,
     contacto: {
       nombre: insurer.contact?.name ?? "—",
       email: insurer.contact?.email ?? "—",
@@ -88,9 +92,12 @@ function buildInsurerPayload(carrier: Carrier) {
     lines: ramosLimpios,
     status: carrier.estado,
     rating: Number.isFinite(carrier.calificacion) ? Number(carrier.calificacion) : 0,
-    annual_premium: Number.isFinite(carrier.primasAnuales) ? Number(carrier.primasAnuales) : 0,
+    annual_premium: Number.isFinite(carrier.primasAnualesUsd) ? Number(carrier.primasAnualesUsd) : 0,
+    annual_premium_usd: Number.isFinite(carrier.primasAnualesUsd) ? Number(carrier.primasAnualesUsd) : 0,
+    annual_premium_pesos: Number.isFinite(carrier.primasAnualesPesos) ? Number(carrier.primasAnualesPesos) : 0,
     active_policies: Number.isFinite(carrier.polizasVigentes) ? Number(carrier.polizasVigentes) : 0,
     loss_ratio: Number.isFinite(carrier.siniestralidad) ? Number(carrier.siniestralidad) : 0,
+    bcu_exchange_rate: Number.isFinite(carrier.tcBancoCentral) ? Number(carrier.tcBancoCentral) : 0,
     contact: {
       name: carrier.contacto.nombre?.trim() || null,
       email: carrier.contacto.email?.trim() || null,
@@ -104,8 +111,11 @@ function buildInsurerPayload(carrier: Carrier) {
   return { payload, ramos: ramosLimpios };
 }
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("es-UY", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+const formatCurrency = (value: number, currency: "USD" | "UYU") =>
+  new Intl.NumberFormat("es-UY", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
+
+const formatTc = (value: number) =>
+  value > 0 ? new Intl.NumberFormat("es-UY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) : "Sin dato";
 
 const formatDate = (isoDate: string | null) =>
   isoDate ? new Intl.DateTimeFormat("es-UY", { dateStyle: "medium" }).format(new Date(isoDate)) : "Sin fecha";
@@ -135,9 +145,11 @@ export default function InsuranceCarriersMaintenance() {
     ramos: [],
     estado: "Activa",
     calificacion: 4,
-    primasAnuales: 0,
+    primasAnualesUsd: 0,
+    primasAnualesPesos: 0,
     polizasVigentes: 0,
     siniestralidad: 0,
+    tcBancoCentral: 0,
     contacto: { nombre: "", email: "", telefono: "" },
     acuerdosClaves: [],
     ultimaActualizacion: new Date().toISOString().slice(0, 10),
@@ -288,7 +300,8 @@ export default function InsuranceCarriersMaintenance() {
     const totales = filtered.reduce(
       (acc, carrier) => {
         acc.polizas += carrier.polizasVigentes;
-        acc.primas += carrier.primasAnuales;
+        acc.primasUsd += carrier.primasAnualesUsd;
+        acc.primasPesos += carrier.primasAnualesPesos;
         acc.siniestralidad += carrier.siniestralidad;
         acc.cantidad += 1;
         if (carrier.estado === "Activa") acc.activos += 1;
@@ -296,7 +309,16 @@ export default function InsuranceCarriersMaintenance() {
         if (carrier.estado === "Suspendida") acc.suspendidos += 1;
         return acc;
       },
-      { cantidad: 0, polizas: 0, primas: 0, siniestralidad: 0, activos: 0, revision: 0, suspendidos: 0 }
+      {
+        cantidad: 0,
+        polizas: 0,
+        primasUsd: 0,
+        primasPesos: 0,
+        siniestralidad: 0,
+        activos: 0,
+        revision: 0,
+        suspendidos: 0,
+      }
     );
 
     return {
@@ -523,9 +545,10 @@ export default function InsuranceCarriersMaintenance() {
           </button>
         </div>
 
-        <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <ResumenCard title="Compañías activas" value={`${resumen.activos} / ${filtered.length}`} subtitle="Activas sobre las filtradas" />
-          <ResumenCard title="Primas anuales" value={formatCurrency(resumen.primas)} subtitle="Total reportado" />
+          <ResumenCard title="Primas anuales (USD)" value={formatCurrency(resumen.primasUsd, "USD")} subtitle="Total reportado" />
+          <ResumenCard title="Primas anuales (UYU)" value={formatCurrency(resumen.primasPesos, "UYU")} subtitle="Total reportado" />
           <ResumenCard title="Pólizas vigentes" value={resumen.polizas.toLocaleString("es-UY")} subtitle="Portafolio asociado" />
           <ResumenCard title="Siniestralidad promedio" value={`${resumen.siniestralidadPromedio}%`} subtitle="Sobre las filtradas" />
         </dl>
@@ -682,10 +705,35 @@ export default function InsuranceCarriersMaintenance() {
               <input
                 type="number"
                 min="0"
-                value={newCarrier.primasAnuales}
-                onChange={(event) => setNewCarrier((prev) => ({ ...prev, primasAnuales: Number(event.target.value) }))}
+                value={newCarrier.primasAnualesUsd}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, primasAnualesUsd: Number(event.target.value) }))}
                 className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 placeholder="1200000"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              Primas anuales (UYU)
+              <input
+                type="number"
+                min="0"
+                value={newCarrier.primasAnualesPesos}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, primasAnualesPesos: Number(event.target.value) }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="35000000"
+              />
+            </label>
+
+            <label className="flex flex-col text-sm text-slate-700 gap-1">
+              TC Banco Central
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={newCarrier.tcBancoCentral}
+                onChange={(event) => setNewCarrier((prev) => ({ ...prev, tcBancoCentral: Number(event.target.value) }))}
+                className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="39.50"
               />
             </label>
 
@@ -858,7 +906,8 @@ export default function InsuranceCarriersMaintenance() {
                   <th className="px-4 py-3">Ramos</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Calificación</th>
-                  <th className="px-4 py-3">Primas</th>
+                  <th className="px-4 py-3">Primas (USD)</th>
+                  <th className="px-4 py-3">Primas (UYU)</th>
                   <th className="px-4 py-3">Pólizas</th>
                 </tr>
               </thead>
@@ -891,13 +940,14 @@ export default function InsuranceCarriersMaintenance() {
                       <EstadoPill value={carrier.estado} />
                     </td>
                     <td className="px-4 py-3 font-semibold text-slate-900">{carrier.calificacion.toFixed(1)} / 5</td>
-                    <td className="px-4 py-3">{formatCurrency(carrier.primasAnuales)}</td>
+                    <td className="px-4 py-3">{formatCurrency(carrier.primasAnualesUsd, "USD")}</td>
+                    <td className="px-4 py-3">{formatCurrency(carrier.primasAnualesPesos, "UYU")}</td>
                     <td className="px-4 py-3">{carrier.polizasVigentes.toLocaleString("es-UY")}</td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-500">
+                    <td colSpan={7} className="px-4 py-6 text-center text-sm text-slate-500">
                       No hay aseguradoras que coincidan con los filtros seleccionados.
                     </td>
                   </tr>
@@ -1009,10 +1059,39 @@ export default function InsuranceCarriersMaintenance() {
                       <input
                         type="number"
                         min="0"
-                        value={editedCarrier.primasAnuales}
+                        value={editedCarrier.primasAnualesUsd}
                         onChange={(event) =>
                           setEditedCarrier((prev) =>
-                            prev ? { ...prev, primasAnuales: Number(event.target.value) } : prev,
+                            prev ? { ...prev, primasAnualesUsd: Number(event.target.value) } : prev,
+                          )
+                        }
+                        className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primas anuales (UYU)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editedCarrier.primasAnualesPesos}
+                        onChange={(event) =>
+                          setEditedCarrier((prev) =>
+                            prev ? { ...prev, primasAnualesPesos: Number(event.target.value) } : prev,
+                          )
+                        }
+                        className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">TC Banco Central</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editedCarrier.tcBancoCentral}
+                        onChange={(event) =>
+                          setEditedCarrier((prev) =>
+                            prev ? { ...prev, tcBancoCentral: Number(event.target.value) } : prev,
                           )
                         }
                         className="rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
@@ -1152,9 +1231,11 @@ export default function InsuranceCarriersMaintenance() {
                     <DetailItem label="País" value={selectedCarrier.pais} />
                     <DetailItem label="Estado" value={<EstadoPill value={selectedCarrier.estado} />} />
                     <DetailItem label="Calificación" value={`${selectedCarrier.calificacion.toFixed(1)} / 5`} />
-                    <DetailItem label="Primas" value={formatCurrency(selectedCarrier.primasAnuales)} />
+                    <DetailItem label="Primas (USD)" value={formatCurrency(selectedCarrier.primasAnualesUsd, "USD")} />
+                    <DetailItem label="Primas (UYU)" value={formatCurrency(selectedCarrier.primasAnualesPesos, "UYU")} />
                     <DetailItem label="Pólizas" value={selectedCarrier.polizasVigentes.toLocaleString("es-UY")} />
                     <DetailItem label="Siniestralidad" value={`${selectedCarrier.siniestralidad}%`} />
+                    <DetailItem label="TC Banco Central" value={formatTc(selectedCarrier.tcBancoCentral)} />
                   </div>
 
                   <div>
@@ -1238,11 +1319,11 @@ export default function InsuranceCarriersMaintenance() {
                               {policy.next_renewal ? formatDate(policy.next_renewal) : "Sin fecha"}
                             </div>
                           </div>
-                          <div className="text-xs font-semibold text-slate-700">
-                            {policy.premium !== null && policy.premium !== undefined
-                              ? formatCurrency(policy.premium)
+                        <div className="text-xs font-semibold text-slate-700">
+                          {policy.premium !== null && policy.premium !== undefined
+                              ? formatCurrency(policy.premium, "USD")
                               : "Sin prima"}
-                          </div>
+                        </div>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button
