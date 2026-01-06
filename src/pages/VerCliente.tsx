@@ -131,6 +131,69 @@ export default function VerCliente() {
   const [showDocModal, setShowDocModal] = useState(false);
   const [showOtherDocsModal, setShowOtherDocsModal] = useState(false);
 
+  const normalizeApoderado = (item: Partial<ApoderadoItem>): ApoderadoItem => ({
+    figura: item.figura ?? FIGURA_APODERADO_OPTIONS[0],
+    tipoPersona: item.tipoPersona ?? TIPO_PERSONA_OPTIONS[0],
+    nombre: item.nombre ?? "",
+    documentoTipo: item.documentoTipo ?? DOCUMENTO_APODERADO_OPTIONS[0],
+    documento: item.documento ?? "",
+    telefono: item.telefono ?? "",
+    email: item.email ?? "",
+    direccion: item.direccion ?? "",
+    notas: item.notas ?? "",
+  });
+
+  const normalizeLaboral = (item: Partial<LaboralHistorialItem>): LaboralHistorialItem => ({
+    tipoEmpresa: item.tipoEmpresa ?? "",
+    tipoVinculo: item.tipoVinculo ?? VINCULO_OPTIONS[0],
+    nombreEmpresa: item.nombreEmpresa ?? "",
+    fechaIngreso: item.fechaIngreso ?? "",
+    nominal: item.nominal ?? "",
+    promedio: item.promedio ?? "",
+  });
+
+  const hasApoderadoData = (item: ApoderadoItem) =>
+    Boolean(
+      item.nombre.trim() ||
+        item.documento.trim() ||
+        item.telefono.trim() ||
+        item.email.trim() ||
+        item.direccion.trim() ||
+        item.notas.trim(),
+    );
+
+  const hasLaboralData = (item: LaboralHistorialItem) =>
+    Boolean(
+      item.tipoEmpresa.trim() ||
+        item.nombreEmpresa.trim() ||
+        item.fechaIngreso.trim() ||
+        item.nominal.trim() ||
+        item.promedio.trim(),
+    );
+
+  const normalizeApoderadosPayload = (items: ApoderadoItem[]) =>
+    items.filter(hasApoderadoData).map((item) => ({
+      figura: item.figura,
+      tipoPersona: item.tipoPersona,
+      nombre: item.nombre.trim(),
+      documentoTipo: item.documentoTipo,
+      documento: item.documento.trim(),
+      telefono: item.telefono.trim(),
+      email: item.email.trim(),
+      direccion: item.direccion.trim(),
+      notas: item.notas.trim(),
+    }));
+
+  const normalizeLaboralPayload = (items: LaboralHistorialItem[]) =>
+    items.filter(hasLaboralData).map((item) => ({
+      tipoEmpresa: item.tipoEmpresa.trim(),
+      tipoVinculo: item.tipoVinculo,
+      nombreEmpresa: item.nombreEmpresa.trim(),
+      fechaIngreso: item.fechaIngreso.trim(),
+      nominal: item.nominal.trim(),
+      promedio: item.promedio.trim(),
+    }));
+
   useEffect(() => {
     if (!id || !token) return;
     setIsLoading(true);
@@ -140,6 +203,8 @@ export default function VerCliente() {
       .then(([data, policiesResponse, insurersResponse]) => {
         const mainContact = data.contacts?.[0];
         const address = data.address ?? data.direccion ?? "";
+        const apoderados = (data.apoderados ?? []).map(normalizeApoderado);
+        const laboralHistorial = (data.laboralHistorial ?? []).map(normalizeLaboral);
         setForm({
           nombre: data.name ?? "",
           rut: data.document ?? "",
@@ -151,8 +216,8 @@ export default function VerCliente() {
           pais: "",
           contacto: mainContact?.name ?? "",
           notas: "",
-          apoderados: [{ ...emptyApoderadoItem }],
-          laboralHistorial: [{ ...emptyLaboralHistorialItem }],
+          apoderados: apoderados.length ? apoderados : [{ ...emptyApoderadoItem }],
+          laboralHistorial: laboralHistorial.length ? laboralHistorial : [{ ...emptyLaboralHistorialItem }],
           docFiles: [],
           otherDocs: [],
         });
@@ -236,6 +301,8 @@ export default function VerCliente() {
               },
             ]
           : [];
+      const apoderados = normalizeApoderadosPayload(form.apoderados);
+      const laboralHistorial = normalizeLaboralPayload(form.laboralHistorial);
 
       const updated = await apiUpdateClient(
         id,
@@ -245,6 +312,8 @@ export default function VerCliente() {
           city: form.ciudad?.trim() || null,
           address: form.direccion?.trim() || null,
           contacts,
+          apoderados,
+          laboralHistorial,
         },
         token,
       );

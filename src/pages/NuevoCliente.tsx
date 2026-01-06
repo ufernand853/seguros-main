@@ -193,6 +193,48 @@ export default function NuevoCliente() {
     );
   };
 
+  const hasApoderadoData = (item: ApoderadoItem) =>
+    Boolean(
+      item.nombre.trim() ||
+        item.documento.trim() ||
+        item.telefono.trim() ||
+        item.email.trim() ||
+        item.direccion.trim() ||
+        item.notas.trim(),
+    );
+
+  const hasLaboralData = (item: LaboralHistorialItem) =>
+    Boolean(
+      item.tipoEmpresa.trim() ||
+        item.nombreEmpresa.trim() ||
+        item.fechaIngreso.trim() ||
+        item.nominal.trim() ||
+        item.promedio.trim(),
+    );
+
+  const normalizeApoderados = (items: ApoderadoItem[]) =>
+    items.filter(hasApoderadoData).map((item) => ({
+      figura: item.figura,
+      tipoPersona: item.tipoPersona,
+      nombre: item.nombre.trim(),
+      documentoTipo: item.documentoTipo,
+      documento: item.documento.trim(),
+      telefono: item.telefono.trim(),
+      email: item.email.trim(),
+      direccion: item.direccion.trim(),
+      notas: item.notas.trim(),
+    }));
+
+  const normalizeLaboralHistorial = (items: LaboralHistorialItem[]) =>
+    items.filter(hasLaboralData).map((item) => ({
+      tipoEmpresa: item.tipoEmpresa.trim(),
+      tipoVinculo: item.tipoVinculo,
+      nombreEmpresa: item.nombreEmpresa.trim(),
+      fechaIngreso: item.fechaIngreso.trim(),
+      nominal: item.nominal.trim(),
+      promedio: item.promedio.trim(),
+    }));
+
   const onSave = async () => {
     if (!token) {
       setError("Sesión no válida. Iniciá sesión nuevamente para crear clientes.");
@@ -213,13 +255,18 @@ export default function NuevoCliente() {
               },
             ]
           : [];
+      const apoderados = normalizeApoderados(form.apoderados);
+      const laboralHistorial = normalizeLaboralHistorial(form.laboralHistorial);
 
       const created = await apiCreateClient(
         {
           name: form.nombre.trim(),
           document: form.rut.trim(),
           city: form.ciudad?.trim() || null,
+          address: form.direccion?.trim() || null,
           contacts,
+          apoderados,
+          laboralHistorial,
         },
         token,
       );

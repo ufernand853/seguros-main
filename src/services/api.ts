@@ -111,6 +111,8 @@ export type CreateClientPayload = {
   city?: string | null;
   address?: string | null;
   contacts?: { name: string; email?: string | null; phone?: string | null }[];
+  apoderados?: ApoderadoItem[];
+  laboralHistorial?: LaboralHistorialItem[];
 };
 
 export type UpdateClientPayload = Partial<CreateClientPayload>;
@@ -149,6 +151,8 @@ export type ClientListItem = {
   address?: string | null;
   contacts?: ContactInfo[];
   policies?: PolicySummary[];
+  apoderados?: ApoderadoItem[];
+  laboralHistorial?: LaboralHistorialItem[];
 };
 
 export type ContactInfo = { id?: string; name?: string; email?: string | null; phone?: string | null };
@@ -178,6 +182,27 @@ export type ClientSummary = ClientListItem & {
   opportunity?: PipelineItem | null;
   renewal?: RenewalItem | null;
   nextTask?: TaskItem | null;
+};
+
+export type ApoderadoItem = {
+  figura: string;
+  tipoPersona: string;
+  nombre: string;
+  documentoTipo: string;
+  documento: string;
+  telefono: string;
+  email: string;
+  direccion: string;
+  notas: string;
+};
+
+export type LaboralHistorialItem = {
+  tipoEmpresa: string;
+  tipoVinculo: string;
+  nombreEmpresa: string;
+  fechaIngreso: string;
+  nominal: string;
+  promedio: string;
 };
 
 export async function apiGetClientSummary(clientId: string, accessToken: string): Promise<ClientSummary> {
