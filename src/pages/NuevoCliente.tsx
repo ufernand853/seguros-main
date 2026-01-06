@@ -276,13 +276,13 @@ export default function NuevoCliente() {
           ? (created as { id?: string; item?: { id?: string } }).id ?? (created as { item?: { id?: string } }).item?.id
           : undefined;
 
-      if (policyForm.insurerId && policyForm.type.trim()) {
-        if (!createdId) {
-          setError("Cliente creado, pero no se pudo asociar la póliza porque falta el identificador del cliente.");
-          navigate("/clientes");
-          return;
-        }
+      if (!createdId) {
+        throw new Error(
+          "El cliente se creó, pero el API no devolvió un identificador válido. Verifica la respuesta del backend o vuelve a intentar.",
+        );
+      }
 
+      if (policyForm.insurerId && policyForm.type.trim()) {
         try {
           await apiCreatePolicy(
             {
@@ -298,8 +298,8 @@ export default function NuevoCliente() {
         } catch (err) {
           setError(
             err instanceof Error
-              ? `Cliente creado, pero no se pudo asociar la póliza: ${err.message}`
-              : "Cliente creado, pero no se pudo asociar la póliza.",
+              ? `Cliente creado, pero no se pudo asociar la póliza. Motivo: ${err.message}. Verifica que el cliente exista en la base y que el servidor esté apuntando a la misma URL del API.`
+              : "Cliente creado, pero no se pudo asociar la póliza. Verifica que el cliente exista y que el API esté disponible.",
           );
           navigate(`/clientes/${encodeURIComponent(createdId)}/editar`);
           return;

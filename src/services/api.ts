@@ -217,11 +217,19 @@ export async function apiGetClientSummary(clientId: string, accessToken: string)
     if (errorWithStatus.status !== 404) {
       throw error;
     }
-    return request(`/clients/${clientId}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    try {
+      return await request(`/clients/${clientId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+    } catch (fallbackError) {
+      const fallbackWithStatus = fallbackError as Error & { status?: number };
+      if (fallbackWithStatus.status === 404) {
+        throw new Error("Cliente no encontrado. Verifica el identificador y vuelve a intentar.");
+      }
+      throw fallbackError;
+    }
   }
 }
 
