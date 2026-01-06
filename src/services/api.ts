@@ -150,6 +150,8 @@ export async function apiListClients(accessToken: string): Promise<{ items: Clie
 }
 
 export type ClientSummary = ClientListItem & {
+  address?: string | null;
+  direccion?: string | null;
   tasks?: TaskItem[];
   opportunity?: PipelineItem | null;
   renewal?: RenewalItem | null;
