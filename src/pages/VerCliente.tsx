@@ -294,6 +294,7 @@ export default function VerCliente() {
     setError(null);
     setIsSaving(true);
 
+    let saved = false;
     try {
       const contacts =
         form.contacto?.trim() || form.email?.trim() || form.telefono?.trim()
@@ -334,11 +335,15 @@ export default function VerCliente() {
         contacto: mainContact?.name ?? current.contacto,
       }));
       setIsEditing(false);
-      navigate("/clientes");
+      saved = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron guardar los cambios.");
     } finally {
       setIsSaving(false);
+    }
+
+    if (saved) {
+      navigate("/clientes", { replace: true });
     }
   };
 
