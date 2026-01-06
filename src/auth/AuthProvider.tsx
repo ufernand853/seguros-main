@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type User = { name: string; email?: string };
+type User = { name: string; email?: string; role?: string };
 type AuthState = {
   user: User | null;
   token: string | null;
