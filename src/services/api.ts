@@ -106,12 +106,30 @@ export type CreateClientPayload = {
   name: string;
   document: string;
   city?: string | null;
+  address?: string | null;
   contacts?: { name: string; email?: string | null; phone?: string | null }[];
 };
+
+export type UpdateClientPayload = Partial<CreateClientPayload>;
 
 export async function apiCreateClient(payload: CreateClientPayload, accessToken: string) {
   return request("/clients", {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdateClient(
+  clientId: string,
+  payload: UpdateClientPayload,
+  accessToken: string,
+): Promise<ClientListItem> {
+  return request(`/clients/${clientId}`, {
+    method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
@@ -125,6 +143,7 @@ export type ClientListItem = {
   name: string;
   document?: string;
   city?: string | null;
+  address?: string | null;
   contacts?: ContactInfo[];
   policies?: PolicySummary[];
 };

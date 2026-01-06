@@ -9,6 +9,7 @@ import {
   apiCreatePolicy,
   apiListInsurers,
   apiListPolicies,
+  apiUpdateClient,
   apiUpdatePolicy,
   type InsurerListItem,
   type PolicyItem,
@@ -108,6 +109,7 @@ export default function VerCliente() {
   const [form, setForm] = useState<ClientePayload>(emptyForm);
   const [isEditing, setIsEditing] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PolicySummary[]>([]);
   const [availablePolicies, setAvailablePolicies] = useState<PolicyItem[]>([]);
@@ -209,11 +211,61 @@ export default function VerCliente() {
     });
 
   const onCancel = () => navigate("/clientes");
-  const onSave = () => {
+  const onSave = async () => {
     if (!isEditing) return; // bloqueado si no está en edición
-    // TODO: enviar a API (PUT/PATCH)
-    console.log("Guardar cambios (cliente)", form);
-    setIsEditing(false);
+    if (!id || !token) {
+      setError("Sesión no válida. Iniciá sesión nuevamente para guardar cambios.");
+      return;
+    }
+    if (!form.nombre.trim() || !form.rut.trim()) {
+      setError("Nombre y documento son obligatorios.");
+      return;
+    }
+
+    setError(null);
+    setIsSaving(true);
+
+    try {
+      const contacts =
+        form.contacto?.trim() || form.email?.trim() || form.telefono?.trim()
+          ? [
+              {
+                name: form.contacto?.trim() || "Contacto principal",
+                email: form.email?.trim() || null,
+                phone: form.telefono?.trim() || null,
+              },
+            ]
+          : [];
+
+      const updated = await apiUpdateClient(
+        id,
+        {
+          name: form.nombre.trim(),
+          document: form.rut.trim(),
+          city: form.ciudad?.trim() || null,
+          address: form.direccion?.trim() || null,
+          contacts,
+        },
+        token,
+      );
+
+      const mainContact = updated.contacts?.[0];
+      setForm((current) => ({
+        ...current,
+        nombre: updated.name ?? current.nombre,
+        rut: updated.document ?? current.rut,
+        direccion: updated.address ?? current.direccion,
+        ciudad: updated.city ?? current.ciudad,
+        telefono: mainContact?.phone ?? current.telefono,
+        email: mainContact?.email ?? current.email,
+        contacto: mainContact?.name ?? current.contacto,
+      }));
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron guardar los cambios.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const insurerNameById = (insurerId?: string | null) =>
@@ -988,15 +1040,15 @@ export default function VerCliente() {
         </button>
         <button
           type="button"
-          disabled={!isEditing}
+          disabled={!isEditing || isSaving}
           onClick={onSave}
           className={`px-4 py-2 rounded-lg text-white font-semibold ${
-            isEditing
+            isEditing && !isSaving
               ? "bg-emerald-600 hover:bg-emerald-700"
               : "bg-emerald-300 cursor-not-allowed"
           }`}
         >
-          Guardar cambios
+          {isSaving ? "Guardando..." : "Guardar cambios"}
         </button>
         <button
           type="button"
