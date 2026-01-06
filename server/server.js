@@ -40,13 +40,26 @@ function toObjectId(value) {
 
 function buildIdList(value) {
   if (!value) return [];
-  const list = [value];
-  const valueAsString = typeof value === "string" ? value : String(value);
-  if (valueAsString !== value) list.push(valueAsString);
-  const parsed = toObjectId(valueAsString);
-  if (parsed) list.push(parsed);
+  const list = [];
+  const valueAsString = typeof value === "string" ? value.trim() : String(value).trim();
+  const lowercased = valueAsString.toLowerCase();
+  const addValue = (item) => {
+    if (item === undefined || item === null || item === "") return;
+    if (!list.includes(item)) list.push(item);
+  };
+
+  addValue(value);
+  addValue(valueAsString !== value ? valueAsString : undefined);
+  addValue(lowercased !== valueAsString ? lowercased : undefined);
+
+  const parsed = toObjectId(valueAsString) ?? toObjectId(lowercased);
+  if (parsed) addValue(parsed);
+
   if (UUID.isValid(valueAsString)) {
-    list.push(new UUID(valueAsString));
+    addValue(new UUID(valueAsString));
+  }
+  if (lowercased !== valueAsString && UUID.isValid(lowercased)) {
+    addValue(new UUID(lowercased));
   }
   return list;
 }

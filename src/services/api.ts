@@ -61,6 +61,10 @@ async function request(path: string, options: RequestInit) {
   }
 }
 
+function encodePathSegment(value: string) {
+  return encodeURIComponent(value);
+}
+
 export async function apiLogin(email: string, password: string): Promise<LoginResponse> {
   return request("/auth/login", {
     method: "POST",
@@ -133,7 +137,7 @@ export async function apiUpdateClient(
   payload: UpdateClientPayload,
   accessToken: string,
 ): Promise<ClientListItem> {
-  return request(`/clients/${clientId}`, {
+  return request(`/clients/${encodePathSegment(clientId)}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -207,7 +211,7 @@ export type LaboralHistorialItem = {
 
 export async function apiGetClientSummary(clientId: string, accessToken: string): Promise<ClientSummary> {
   try {
-    return await request(`/clients/${clientId}/summary`, {
+    return await request(`/clients/${encodePathSegment(clientId)}/summary`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -218,7 +222,7 @@ export async function apiGetClientSummary(clientId: string, accessToken: string)
       throw error;
     }
     try {
-      return await request(`/clients/${clientId}`, {
+      return await request(`/clients/${encodePathSegment(clientId)}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
