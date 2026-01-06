@@ -657,6 +657,48 @@ api.post("/clients", authenticate, async (req, res) => {
   }
 });
 
+api.patch("/clients/:id", authenticate, async (req, res) => {
+  const clientId = req.params.id;
+  const { name, document, city, address, contacts } = req.body || {};
+
+  if ("name" in (req.body || {}) && !name) {
+    return res.status(400).json({ error: "Nombre es obligatorio" });
+  }
+  if ("document" in (req.body || {}) && !document) {
+    return res.status(400).json({ error: "Documento es obligatorio" });
+  }
+
+  const update = { updated_at: new Date() };
+  if ("name" in (req.body || {})) update.name = name;
+  if ("document" in (req.body || {})) update.document = document;
+  if ("city" in (req.body || {})) update.city = city ?? null;
+  if ("address" in (req.body || {})) update.address = address ?? null;
+  if ("contacts" in (req.body || {})) {
+    update.contacts = Array.isArray(contacts)
+      ? contacts.map((contact) => ({
+          id: contact.id ?? randomUUID(),
+          name: contact.name ?? "",
+          email: contact.email ?? null,
+          phone: contact.phone ?? null,
+        }))
+      : [];
+  }
+
+  try {
+    const db = getDb();
+    const updated = await db.collection("clients").findOneAndUpdate(
+      { _id: clientId },
+      { $set: update },
+      { returnDocument: "after" },
+    );
+    if (!updated?.value) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(mapDocument(updated.value));
+  } catch (err) {
+    console.error("[clients update]", err);
+    res.status(500).json({ error: "No se pudo actualizar el cliente" });
+  }
+});
+
 api.get("/clients/:id/summary", authenticate, async (req, res) => {
   const clientId = req.params.id;
   try {
