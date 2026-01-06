@@ -113,6 +113,8 @@ export type CreateClientPayload = {
   name: string;
   document: string;
   city?: string | null;
+  department?: string | null;
+  country?: string | null;
   address?: string | null;
   contacts?: { name: string; email?: string | null; phone?: string | null }[];
   apoderados?: ApoderadoItem[];
@@ -152,6 +154,8 @@ export type ClientListItem = {
   name: string;
   document?: string;
   city?: string | null;
+  department?: string | null;
+  country?: string | null;
   address?: string | null;
   contacts?: ContactInfo[];
   policies?: PolicySummary[];
