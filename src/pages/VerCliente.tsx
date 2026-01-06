@@ -330,6 +330,7 @@ export default function VerCliente() {
         contacto: mainContact?.name ?? current.contacto,
       }));
       setIsEditing(false);
+      navigate("/clientes");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron guardar los cambios.");
     } finally {
