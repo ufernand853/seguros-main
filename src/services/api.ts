@@ -502,6 +502,15 @@ export async function apiUpdateInsurer(
   });
 }
 
+export async function apiDeleteInsurer(insurerId: string, accessToken: string): Promise<{ ok: boolean }> {
+  return request(`/insurers/${insurerId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export async function apiListPolicies(accessToken: string): Promise<{ items: PolicyItem[] }> {
   return request("/policies", {
     headers: {
