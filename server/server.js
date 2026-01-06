@@ -4,6 +4,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
+import { UUID } from "bson";
 import { closeConnection, connectToDatabase, getDb } from "./db.js";
 import { POLICY_ROLE_KEYS, buildPolicyRoleEntries, normalizeRoleAssignments } from "./policyRoles.js";
 
@@ -40,8 +41,13 @@ function toObjectId(value) {
 function buildIdList(value) {
   if (!value) return [];
   const list = [value];
-  const parsed = toObjectId(value);
+  const valueAsString = typeof value === "string" ? value : String(value);
+  if (valueAsString !== value) list.push(valueAsString);
+  const parsed = toObjectId(valueAsString);
   if (parsed) list.push(parsed);
+  if (UUID.isValid(valueAsString)) {
+    list.push(new UUID(valueAsString));
+  }
   return list;
 }
 
