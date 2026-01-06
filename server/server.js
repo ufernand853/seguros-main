@@ -67,6 +67,33 @@ function mapClientSummary(client) {
   };
 }
 
+function normalizeApoderados(apoderados) {
+  if (!Array.isArray(apoderados)) return [];
+  return apoderados.map((item) => ({
+    figura: item?.figura ?? "Empresa",
+    tipoPersona: item?.tipoPersona ?? "Persona física",
+    nombre: item?.nombre ?? "",
+    documentoTipo: item?.documentoTipo ?? "DNI",
+    documento: item?.documento ?? "",
+    telefono: item?.telefono ?? "",
+    email: item?.email ?? "",
+    direccion: item?.direccion ?? "",
+    notas: item?.notas ?? "",
+  }));
+}
+
+function normalizeLaboralHistorial(historial) {
+  if (!Array.isArray(historial)) return [];
+  return historial.map((item) => ({
+    tipoEmpresa: item?.tipoEmpresa ?? "",
+    tipoVinculo: item?.tipoVinculo ?? "Empleado",
+    nombreEmpresa: item?.nombreEmpresa ?? "",
+    fechaIngreso: item?.fechaIngreso ?? "",
+    nominal: item?.nominal ?? "",
+    promedio: item?.promedio ?? "",
+  }));
+}
+
 function mapProductionEntry(entry) {
   if (!entry) return null;
   const producer = entry.producer ?? {};
@@ -647,7 +674,7 @@ api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
 });
 
 api.post("/clients", authenticate, async (req, res) => {
-  const { name, document, city, contacts, policies } = req.body || {};
+  const { name, document, city, address, contacts, policies, apoderados, laboralHistorial } = req.body || {};
   if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
 
   const clientDoc = {
@@ -655,6 +682,7 @@ api.post("/clients", authenticate, async (req, res) => {
     name,
     document,
     city: city ?? null,
+    address: address ?? null,
     contacts: Array.isArray(contacts)
       ? contacts.map((contact) => ({
           id: contact.id ?? randomUUID(),
@@ -663,6 +691,8 @@ api.post("/clients", authenticate, async (req, res) => {
           phone: contact.phone ?? null,
         }))
       : [],
+    apoderados: normalizeApoderados(apoderados),
+    laboralHistorial: normalizeLaboralHistorial(laboralHistorial),
     policies: Array.isArray(policies)
       ? policies.map((policy) => ({
           id: policy.id ?? randomUUID(),
@@ -688,7 +718,7 @@ api.post("/clients", authenticate, async (req, res) => {
 
 api.patch("/clients/:id", authenticate, async (req, res) => {
   const clientId = req.params.id;
-  const { name, document, city, address, contacts } = req.body || {};
+  const { name, document, city, address, contacts, apoderados, laboralHistorial } = req.body || {};
 
   if ("name" in (req.body || {}) && !name) {
     return res.status(400).json({ error: "Nombre es obligatorio" });
@@ -711,6 +741,12 @@ api.patch("/clients/:id", authenticate, async (req, res) => {
           phone: contact.phone ?? null,
         }))
       : [];
+  }
+  if ("apoderados" in (req.body || {})) {
+    update.apoderados = normalizeApoderados(apoderados);
+  }
+  if ("laboralHistorial" in (req.body || {})) {
+    update.laboralHistorial = normalizeLaboralHistorial(laboralHistorial);
   }
 
   try {
