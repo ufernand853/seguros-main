@@ -137,12 +137,13 @@ export default function VerCliente() {
     Promise.all([apiGetClientSummary(id, token), apiListPolicies(token), apiListInsurers(token)])
       .then(([data, policiesResponse, insurersResponse]) => {
         const mainContact = data.contacts?.[0];
+        const address = data.address ?? data.direccion ?? "";
         setForm({
           nombre: data.name ?? "",
           rut: data.document ?? "",
           telefono: mainContact?.phone ?? "",
           email: mainContact?.email ?? "",
-          direccion: "",
+          direccion: address,
           ciudad: data.city ?? "",
           departamento: "",
           pais: "",
