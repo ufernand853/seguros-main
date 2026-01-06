@@ -765,6 +765,20 @@ api.patch("/clients/:id", authenticate, async (req, res) => {
   }
 });
 
+api.get("/clients/:id", authenticate, async (req, res) => {
+  const clientId = req.params.id;
+  try {
+    const db = getDb();
+    const clientIds = buildIdList(clientId);
+    const clientDoc = await db.collection("clients").findOne({ _id: { $in: clientIds } });
+    if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(mapDocument(clientDoc));
+  } catch (err) {
+    console.error("[clients detail]", err);
+    res.status(500).json({ error: "No se pudo recuperar el cliente" });
+  }
+});
+
 api.get("/clients/:id/summary", authenticate, async (req, res) => {
   const clientId = req.params.id;
   try {
