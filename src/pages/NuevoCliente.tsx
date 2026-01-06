@@ -18,9 +18,22 @@ type NuevoClientePayload = {
   pais?: string;
   contacto?: string;
   notas?: string;
+  apoderados: ApoderadoItem[];
   laboralHistorial: LaboralHistorialItem[];
   docFiles: DocumentAttachment[]; // fotos del documento
   otherDocs: DocumentAttachment[]; // otros documentos
+};
+
+type ApoderadoItem = {
+  figura: string;
+  tipoPersona: string;
+  nombre: string;
+  documentoTipo: string;
+  documento: string;
+  telefono: string;
+  email: string;
+  direccion: string;
+  notas: string;
 };
 
 type LaboralHistorialItem = {
@@ -39,8 +52,22 @@ const DOCUMENT_TYPE_OPTIONS: DocumentCategoryOption[] = [
   { value: "imagen", label: "Imágenes" },
   { value: "otros", label: "Otros" },
 ];
+const FIGURA_APODERADO_OPTIONS = ["Empresa", "Particular"];
+const TIPO_PERSONA_OPTIONS = ["Persona física", "Persona jurídica"];
+const DOCUMENTO_APODERADO_OPTIONS = ["DNI", "Pasaporte"];
 const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
 const VINCULO_OPTIONS = ["Empleado", "Dependiente", "Renta"];
+const emptyApoderadoItem: ApoderadoItem = {
+  figura: FIGURA_APODERADO_OPTIONS[0],
+  tipoPersona: TIPO_PERSONA_OPTIONS[0],
+  nombre: "",
+  documentoTipo: DOCUMENTO_APODERADO_OPTIONS[0],
+  documento: "",
+  telefono: "",
+  email: "",
+  direccion: "",
+  notas: "",
+};
 const emptyLaboralHistorialItem: LaboralHistorialItem = {
   tipoEmpresa: "",
   tipoVinculo: VINCULO_OPTIONS[0],
@@ -64,6 +91,7 @@ export default function NuevoCliente() {
     pais: "",
     contacto: "",
     notas: "",
+    apoderados: [{ ...emptyApoderadoItem }],
     laboralHistorial: [{ ...emptyLaboralHistorialItem }],
     docFiles: [],
     otherDocs: [],
@@ -103,6 +131,25 @@ export default function NuevoCliente() {
 
   const onChange = (k: keyof NuevoClientePayload, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
+
+  const onApoderadoChange = (index: number, field: keyof ApoderadoItem, value: string) =>
+    setForm((current) => {
+      const next = [...current.apoderados];
+      next[index] = { ...next[index], [field]: value };
+      return { ...current, apoderados: next };
+    });
+
+  const addApoderado = () =>
+    setForm((current) => ({
+      ...current,
+      apoderados: [...current.apoderados, { ...emptyApoderadoItem }],
+    }));
+
+  const removeApoderado = (index: number) =>
+    setForm((current) => {
+      const next = current.apoderados.filter((_, idx) => idx !== index);
+      return { ...current, apoderados: next.length ? next : [{ ...emptyApoderadoItem }] };
+    });
 
   const onLaboralHistorialChange = (index: number, field: keyof LaboralHistorialItem, value: string) =>
     setForm((current) => {
@@ -370,6 +417,166 @@ export default function NuevoCliente() {
               className="w-full min-h-[96px] rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
               placeholder="Notas internas..."
             />
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-slate-200 pt-4">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800">Figuras de apoderado</h2>
+              <p className="text-sm text-slate-500">
+                Registra apoderados (empresa o particular), tipo de persona y documentos asociados.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addApoderado}
+              className="mt-2 inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 md:mt-0"
+            >
+              + Agregar apoderado
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            {form.apoderados.map((item, index) => (
+              <div key={`apoderado-${index}`} className="rounded-lg border border-slate-200 p-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Figura
+                    </label>
+                    <select
+                      value={item.figura}
+                      onChange={(event) => onApoderadoChange(index, "figura", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    >
+                      {FIGURA_APODERADO_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Tipo de persona
+                    </label>
+                    <select
+                      value={item.tipoPersona}
+                      onChange={(event) => onApoderadoChange(index, "tipoPersona", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    >
+                      {TIPO_PERSONA_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Nombre / Razón social
+                    </label>
+                    <input
+                      value={item.nombre}
+                      onChange={(event) => onApoderadoChange(index, "nombre", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Ej: Juan Pérez o Apoderados S.A."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Tipo de documento
+                    </label>
+                    <select
+                      value={item.documentoTipo}
+                      onChange={(event) => onApoderadoChange(index, "documentoTipo", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    >
+                      {DOCUMENTO_APODERADO_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Número de documento
+                    </label>
+                    <input
+                      value={item.documento}
+                      onChange={(event) => onApoderadoChange(index, "documento", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="DNI / Pasaporte"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Teléfono
+                    </label>
+                    <input
+                      value={item.telefono}
+                      onChange={(event) => onApoderadoChange(index, "telefono", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="+598..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={item.email}
+                      onChange={(event) => onApoderadoChange(index, "email", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="apoderado@email.com"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Dirección
+                    </label>
+                    <input
+                      value={item.direccion}
+                      onChange={(event) => onApoderadoChange(index, "direccion", event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Calle, número, ciudad"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Notas
+                    </label>
+                    <textarea
+                      value={item.notas}
+                      onChange={(event) => onApoderadoChange(index, "notas", event.target.value)}
+                      className="mt-1 w-full min-h-[80px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Observaciones del apoderado"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => removeApoderado(index)}
+                    className="text-sm font-semibold text-red-600 hover:text-red-700"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
