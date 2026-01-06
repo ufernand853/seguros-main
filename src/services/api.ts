@@ -30,7 +30,10 @@ async function handleResponse(res: Response) {
         : isHtml
           ? `El servidor devolvió HTML en vez de JSON (status ${res.status}). Verifica la URL del API (${API_BASE}) y que el backend esté disponible.`
           : text);
-    throw new Error(message);
+    const error = new Error(message) as Error & { status?: number; body?: unknown };
+    error.status = res.status;
+    error.body = data ?? text;
+    throw error;
   }
 
   if (text && data === null) {
@@ -178,11 +181,23 @@ export type ClientSummary = ClientListItem & {
 };
 
 export async function apiGetClientSummary(clientId: string, accessToken: string): Promise<ClientSummary> {
-  return request(`/clients/${clientId}/summary`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  try {
+    return await request(`/clients/${clientId}/summary`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  } catch (error) {
+    const errorWithStatus = error as Error & { status?: number };
+    if (errorWithStatus.status !== 404) {
+      throw error;
+    }
+    return request(`/clients/${clientId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
 }
 
 export type PipelineItem = {
