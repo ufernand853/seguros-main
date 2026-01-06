@@ -267,6 +267,8 @@ export default function NuevoCliente() {
           name: form.nombre.trim(),
           document: form.rut.trim(),
           city: form.ciudad?.trim() || null,
+          department: form.departamento?.trim() || null,
+          country: form.pais?.trim() || null,
           address: form.direccion?.trim() || null,
           contacts,
           apoderados,

@@ -687,7 +687,8 @@ api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
 });
 
 api.post("/clients", authenticate, async (req, res) => {
-  const { name, document, city, address, contacts, policies, apoderados, laboralHistorial } = req.body || {};
+  const { name, document, city, department, country, address, contacts, policies, apoderados, laboralHistorial } =
+    req.body || {};
   if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
 
   const clientDoc = {
@@ -695,6 +696,8 @@ api.post("/clients", authenticate, async (req, res) => {
     name,
     document,
     city: city ?? null,
+    department: department ?? null,
+    country: country ?? null,
     address: address ?? null,
     contacts: Array.isArray(contacts)
       ? contacts.map((contact) => ({
@@ -731,7 +734,8 @@ api.post("/clients", authenticate, async (req, res) => {
 
 api.patch("/clients/:id", authenticate, async (req, res) => {
   const clientId = req.params.id;
-  const { name, document, city, address, contacts, apoderados, laboralHistorial } = req.body || {};
+  const { name, document, city, department, country, address, contacts, apoderados, laboralHistorial } =
+    req.body || {};
 
   if ("name" in (req.body || {}) && !name) {
     return res.status(400).json({ error: "Nombre es obligatorio" });
@@ -744,6 +748,8 @@ api.patch("/clients/:id", authenticate, async (req, res) => {
   if ("name" in (req.body || {})) update.name = name;
   if ("document" in (req.body || {})) update.document = document;
   if ("city" in (req.body || {})) update.city = city ?? null;
+  if ("department" in (req.body || {})) update.department = department ?? null;
+  if ("country" in (req.body || {})) update.country = country ?? null;
   if ("address" in (req.body || {})) update.address = address ?? null;
   if ("contacts" in (req.body || {})) {
     update.contacts = Array.isArray(contacts)
