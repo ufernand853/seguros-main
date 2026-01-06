@@ -200,7 +200,10 @@ export default function NuevoCliente() {
         item.telefono.trim() ||
         item.email.trim() ||
         item.direccion.trim() ||
-        item.notas.trim(),
+        item.notas.trim() ||
+        item.figura !== FIGURA_APODERADO_OPTIONS[0] ||
+        item.tipoPersona !== TIPO_PERSONA_OPTIONS[0] ||
+        item.documentoTipo !== DOCUMENTO_APODERADO_OPTIONS[0],
     );
 
   const hasLaboralData = (item: LaboralHistorialItem) =>
@@ -209,7 +212,8 @@ export default function NuevoCliente() {
         item.nombreEmpresa.trim() ||
         item.fechaIngreso.trim() ||
         item.nominal.trim() ||
-        item.promedio.trim(),
+        item.promedio.trim() ||
+        item.tipoVinculo !== VINCULO_OPTIONS[0],
     );
 
   const normalizeApoderados = (items: ApoderadoItem[]) =>
