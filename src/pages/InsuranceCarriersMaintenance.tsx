@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthProvider";
 import {
   apiCreateInsurer,
   apiCreatePolicy,
+  apiDeleteInsurer,
   apiListInsurers,
   apiListPolicies,
   apiUpdateInsurer,
@@ -121,7 +122,7 @@ const formatDate = (isoDate: string | null) =>
   isoDate ? new Intl.DateTimeFormat("es-UY", { dateStyle: "medium" }).format(new Date(isoDate)) : "Sin fecha";
 
 export default function InsuranceCarriersMaintenance() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [policies, setPolicies] = useState<PolicyItem[]>([]);
   const [search, setSearch] = useState("");
@@ -133,6 +134,7 @@ export default function InsuranceCarriersMaintenance() {
   const [isLoadingPolicies, setLoadingPolicies] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [isUpdating, setUpdating] = useState(false);
+  const [isDeleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySuccess, setPolicySuccess] = useState<string | null>(null);
@@ -165,6 +167,7 @@ export default function InsuranceCarriersMaintenance() {
   });
   const [editingPolicy, setEditingPolicy] = useState<PolicyItem | null>(null);
   const [isPolicySaving, setPolicySaving] = useState(false);
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
     if (!token) return;
@@ -520,6 +523,34 @@ export default function InsuranceCarriersMaintenance() {
       setError(err instanceof Error ? err.message : "No se pudo actualizar la aseguradora");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleDeleteInsurer = async () => {
+    if (!selectedCarrier) return;
+    if (!token) {
+      setError("Debes iniciar sesión para eliminar aseguradoras");
+      return;
+    }
+    if (!isAdmin) {
+      setError("Solo administradores pueden eliminar aseguradoras");
+      return;
+    }
+
+    const confirmed = window.confirm(`¿Seguro que quieres eliminar la aseguradora "${selectedCarrier.nombre}"?`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+
+    try {
+      await apiDeleteInsurer(selectedCarrier.id, token);
+      setCarriers((prev) => prev.filter((item) => item.id !== selectedCarrier.id));
+      setSelectedId((prev) => (prev === selectedCarrier.id ? "" : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar la aseguradora");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1267,13 +1298,25 @@ export default function InsuranceCarriersMaintenance() {
                     Última actualización: {formatDate(selectedCarrier.ultimaActualizacion)}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleStartEditing}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-                  >
-                    Editar información
-                  </button>
+                  <div className="grid gap-2">
+                    <button
+                      type="button"
+                      onClick={handleStartEditing}
+                      className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                    >
+                      Editar información
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteInsurer}
+                        disabled={isDeleting}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600 shadow-sm hover:bg-rose-100 disabled:opacity-60"
+                      >
+                        {isDeleting ? "Eliminando..." : "Eliminar aseguradora"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
