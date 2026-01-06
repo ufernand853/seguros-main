@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import jwt from "jsonwebtoken";
 import { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { ObjectId } from "mongodb";
 import { closeConnection, connectToDatabase, getDb } from "./db.js";
 import { POLICY_ROLE_KEYS, buildPolicyRoleEntries, normalizeRoleAssignments } from "./policyRoles.js";
 
@@ -28,6 +29,20 @@ function signAccessToken(user) {
   return jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, {
     expiresIn: ACCESS_TTL_SECONDS,
   });
+}
+
+function toObjectId(value) {
+  if (typeof value !== "string" || !ObjectId.isValid(value)) return null;
+  const parsed = new ObjectId(value);
+  return parsed.toHexString() === value ? parsed : null;
+}
+
+function buildIdList(value) {
+  if (!value) return [];
+  const list = [value];
+  const parsed = toObjectId(value);
+  if (parsed) list.push(parsed);
+  return list;
 }
 
 function mapDocument(doc) {
@@ -172,9 +187,13 @@ async function getUserById(id) {
 async function ensureClientsExist(clientIds) {
   if (!clientIds.length) return { ok: true, missing: [] };
   const db = getDb();
-  const rows = await db.collection("clients").find({ _id: { $in: clientIds } }, { projection: { _id: 1 } }).toArray();
-  const foundIds = new Set(rows.map((row) => row._id));
-  const missing = clientIds.filter((id) => !foundIds.has(id));
+  const expandedIds = clientIds.flatMap((id) => buildIdList(id));
+  const rows = await db
+    .collection("clients")
+    .find({ _id: { $in: expandedIds } }, { projection: { _id: 1 } })
+    .toArray();
+  const foundIds = new Set(rows.map((row) => String(row._id)));
+  const missing = clientIds.filter((id) => !foundIds.has(String(id)));
   return { ok: missing.length === 0, missing };
 }
 
@@ -555,14 +574,18 @@ api.post("/claims", authenticate, async (req, res) => {
 
   try {
     const db = getDb();
-    const client = await db.collection("clients").findOne({ _id: client_id });
+    const clientIds = buildIdList(client_id);
+    const client = await db.collection("clients").findOne({ _id: { $in: clientIds } });
     if (!client) return res.status(404).json({ error: "Cliente no encontrado" });
 
     const policyDoc = await db.collection("policies").findOne({ _id: policy_id });
     let policy = policyDoc;
 
     if (policyDoc) {
-      const link = await db.collection("policy_clients").findOne({ policy_id, client_id });
+      const link = await db.collection("policy_clients").findOne({
+        policy_id,
+        client_id: { $in: clientIds },
+      });
       if (!link) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
     } else {
       policy = (client.policies ?? []).find((p) => p.id === policy_id);
@@ -686,8 +709,9 @@ api.patch("/clients/:id", authenticate, async (req, res) => {
 
   try {
     const db = getDb();
+    const clientIds = buildIdList(clientId);
     const updated = await db.collection("clients").findOneAndUpdate(
-      { _id: clientId },
+      { _id: { $in: clientIds } },
       { $set: update },
       { returnDocument: "after" },
     );
@@ -703,10 +727,13 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
   const clientId = req.params.id;
   try {
     const db = getDb();
-    const clientDoc = await db.collection("clients").findOne({ _id: clientId });
+    const clientIds = buildIdList(clientId);
+    const clientDoc = await db.collection("clients").findOne({ _id: { $in: clientIds } });
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
 
-    const policyLinks = await db.collection("policy_clients").find({ client_id: clientId }).toArray();
+    const policyLinks = await db.collection("policy_clients")
+      .find({ client_id: { $in: clientIds } })
+      .toArray();
     const policyIds = Array.from(new Set(policyLinks.map((link) => link.policy_id)));
     const policyDocs = policyIds.length
       ? await db.collection("policies").find({ _id: { $in: policyIds } }).toArray()
@@ -732,7 +759,7 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
     const tasks = await db
       .collection("tasks")
       .aggregate([
-        { $match: { client_id: clientId } },
+        { $match: { client_id: { $in: clientIds } } },
         {
           $lookup: {
             from: "employees",
@@ -759,13 +786,13 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
       .toArray();
     const opportunities = await db
       .collection("pipeline")
-      .find({ client_id: clientId })
+      .find({ client_id: { $in: clientIds } })
       .sort({ updated_at: -1 })
       .limit(1)
       .toArray();
     const renewalRows = await db
       .collection("renewals")
-      .find({ client_id: clientId })
+      .find({ client_id: { $in: clientIds } })
       .sort({ renewal_date: -1 })
       .limit(1)
       .toArray();
@@ -822,15 +849,16 @@ api.delete("/clients/:id", authenticate, requireAdmin, async (req, res) => {
   const clientId = req.params.id;
   try {
     const db = getDb();
-    const deleted = await db.collection("clients").findOneAndDelete({ _id: clientId });
+    const clientIds = buildIdList(clientId);
+    const deleted = await db.collection("clients").findOneAndDelete({ _id: { $in: clientIds } });
     if (!deleted?.value) return res.status(404).json({ error: "Cliente no encontrado" });
 
     await Promise.all([
-      db.collection("tasks").deleteMany({ client_id: clientId }),
-      db.collection("pipeline").deleteMany({ client_id: clientId }),
-      db.collection("renewals").deleteMany({ client_id: clientId }),
-      db.collection("claims").deleteMany({ client_id: clientId }),
-      db.collection("policy_clients").deleteMany({ client_id: clientId }),
+      db.collection("tasks").deleteMany({ client_id: { $in: clientIds } }),
+      db.collection("pipeline").deleteMany({ client_id: { $in: clientIds } }),
+      db.collection("renewals").deleteMany({ client_id: { $in: clientIds } }),
+      db.collection("claims").deleteMany({ client_id: { $in: clientIds } }),
+      db.collection("policy_clients").deleteMany({ client_id: { $in: clientIds } }),
     ]);
 
     res.json({ ok: true });
@@ -844,15 +872,16 @@ api.delete("/clients/:clientId/policies/:policyId", authenticate, requireAdmin, 
   const { clientId, policyId } = req.params;
   try {
     const db = getDb();
+    const clientIds = buildIdList(clientId);
     const updated = await db.collection("clients").findOneAndUpdate(
-      { _id: clientId, "policies.id": policyId },
+      { _id: { $in: clientIds }, "policies.id": policyId },
       { $pull: { policies: { id: policyId } } },
       { returnDocument: "after" },
     );
 
     const [linksDeleted] = await Promise.all([
-      db.collection("policy_clients").deleteMany({ client_id: clientId, policy_id: policyId }),
-      db.collection("claims").deleteMany({ client_id: clientId, policy_id: policyId }),
+      db.collection("policy_clients").deleteMany({ client_id: { $in: clientIds }, policy_id: policyId }),
+      db.collection("claims").deleteMany({ client_id: { $in: clientIds }, policy_id: policyId }),
     ]);
 
     if (!updated?.value && !linksDeleted?.deletedCount) {
@@ -1193,7 +1222,8 @@ api.post("/tasks", authenticate, async (req, res) => {
   try {
     let clientExists = null;
     if (client_id) {
-      clientExists = await db.collection("clients").findOne({ _id: client_id });
+      const clientIds = buildIdList(client_id);
+      clientExists = await db.collection("clients").findOne({ _id: { $in: clientIds } });
       if (!clientExists) return res.status(400).json({ error: "Cliente no encontrado" });
     }
 
@@ -1240,7 +1270,8 @@ api.patch("/tasks/:id", authenticate, async (req, res) => {
       if (client_id === null) {
         updates.client_id = null;
       } else {
-        const clientExists = await db.collection("clients").findOne({ _id: client_id });
+        const clientIds = buildIdList(client_id);
+        const clientExists = await db.collection("clients").findOne({ _id: { $in: clientIds } });
         if (!clientExists) return res.status(400).json({ error: "Cliente no encontrado" });
         updates.client_id = clientExists._id;
       }
