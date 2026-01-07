@@ -295,6 +295,7 @@ export default function VerCliente() {
     setIsSaving(true);
 
     let saved = false;
+    let updatedId: string | null = null;
     try {
       const contacts =
         form.contacto?.trim() || form.email?.trim() || form.telefono?.trim()
@@ -338,6 +339,7 @@ export default function VerCliente() {
         email: mainContact?.email ?? current.email,
         contacto: mainContact?.name ?? current.contacto,
       }));
+      updatedId = updated.id ?? null;
       setIsEditing(false);
       saved = true;
     } catch (err) {
@@ -347,6 +349,10 @@ export default function VerCliente() {
     }
 
     if (saved) {
+      if (updatedId && updatedId !== id) {
+        navigate(`/clientes/${encodeURIComponent(updatedId)}/editar`, { replace: true });
+        return;
+      }
       navigate("/clientes", { replace: true });
     }
   };
