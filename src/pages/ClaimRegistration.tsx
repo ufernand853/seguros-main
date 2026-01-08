@@ -60,6 +60,7 @@ export default function ClaimRegistration() {
   });
   const [policyForm, setPolicyForm] = useState({
     type: EVENT_TYPES[0],
+    policyNumber: "",
     insurerId: "",
     status: POLICY_STATUSES[0],
     premium: "",
@@ -89,7 +90,12 @@ export default function ClaimRegistration() {
   const policyOptions = selectedClient?.policies ?? [];
   const selectedPolicy = useMemo(() => policyOptions.find((policy) => policy.id === claimForm.poliza), [policyOptions, claimForm.poliza]);
   const formatPolicyLabel = (policy?: PolicySummary) =>
-    [policy?.type ?? "Póliza", policy?.insurer ? `· ${policy.insurer}` : null, policy?.id ? `(${policy.id})` : null]
+    [
+      policy?.type ?? "Póliza",
+      policy?.policy_number ? `#${policy.policy_number}` : null,
+      policy?.insurer ? `· ${policy.insurer}` : null,
+      policy?.id ? `(${policy.id})` : null,
+    ]
       .filter(Boolean)
       .join(" ");
   const formatDate = (value?: string | null) => {
@@ -214,6 +220,7 @@ export default function ClaimRegistration() {
       await apiCreatePolicy(
         {
           type: policyForm.type.trim(),
+          policy_number: policyForm.policyNumber.trim() || null,
           insurer_id: policyForm.insurerId,
           status: policyForm.status || null,
           premium: policyForm.premium ? Number(policyForm.premium) : null,
@@ -237,6 +244,7 @@ export default function ClaimRegistration() {
       setPolicyForm((current) => ({
         ...current,
         type: EVENT_TYPES[0],
+        policyNumber: "",
         status: POLICY_STATUSES[0],
         premium: "",
         nextRenewal: "",
@@ -291,7 +299,8 @@ export default function ClaimRegistration() {
 
       setClaims((current) => [newClaim, ...current.filter((claim) => claim.id !== newClaim.id)]);
 
-      const policyLabel = selectedPolicy?.type ?? selectedPolicy?.id ?? claimForm.poliza;
+      const policyLabel =
+        selectedPolicy?.policy_number ?? selectedPolicy?.type ?? selectedPolicy?.id ?? claimForm.poliza;
       setSuccess(
         `Denuncia registrada en base para la póliza ${policyLabel}. Se notifica al asegurado por ${claimForm.canal} y queda en seguimiento interno.`,
       );
@@ -429,6 +438,18 @@ export default function ClaimRegistration() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-number">
+                  Número de póliza
+                </label>
+                <input
+                  id="policy-number"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-emerald-500"
+                  value={policyForm.policyNumber}
+                  onChange={(event) => setPolicyForm((current) => ({ ...current, policyNumber: event.target.value }))}
+                  placeholder="Ej: POL-2024-0098"
+                />
+              </div>
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-type">
                   Tipo de póliza
