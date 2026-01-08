@@ -122,6 +122,7 @@ export default function VerCliente() {
   const [policyForm, setPolicyForm] = useState({
     insurerId: "",
     type: "",
+    policyNumber: "",
     status: POLICY_STATUSES[0],
     premium: "",
     nextRenewal: "",
@@ -433,6 +434,7 @@ export default function VerCliente() {
       await apiCreatePolicy(
         {
           type: policyForm.type.trim(),
+          policy_number: policyForm.policyNumber.trim() || null,
           insurer_id: policyForm.insurerId,
           status: policyForm.status || null,
           premium: policyForm.premium ? Number(policyForm.premium) : null,
@@ -449,7 +451,7 @@ export default function VerCliente() {
       setPolicies(clientData.policies ?? []);
       setAvailablePolicies(policiesResponse.items ?? []);
 
-      setPolicyForm((prev) => ({ ...prev, type: "", premium: "", nextRenewal: "" }));
+      setPolicyForm((prev) => ({ ...prev, type: "", policyNumber: "", premium: "", nextRenewal: "" }));
       setPolicySuccess("Póliza creada y asociada al cliente.");
     } catch (err) {
       setPolicyError(err instanceof Error ? err.message : "No se pudo crear la póliza.");
@@ -928,6 +930,9 @@ export default function VerCliente() {
                   {policies.map((policy) => (
                     <li key={policy.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                       <div className="text-sm font-semibold text-slate-800">{policy.type ?? "Póliza"}</div>
+                      {policy.policy_number && (
+                        <div className="text-xs text-slate-500">Número: {policy.policy_number}</div>
+                      )}
                       <div className="text-xs text-slate-500">
                         {policy.insurer ?? insurerNameById(policy.insurer_id)} · {policy.status ?? "Sin estado"}
                       </div>
@@ -973,6 +978,18 @@ export default function VerCliente() {
                     value={policyForm.type}
                     onChange={(event) => setPolicyForm((prev) => ({ ...prev, type: event.target.value }))}
                     placeholder="Ej: Hogar"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Número de póliza
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    value={policyForm.policyNumber}
+                    onChange={(event) => setPolicyForm((prev) => ({ ...prev, policyNumber: event.target.value }))}
+                    placeholder="Ej: POL-2024-0098"
                   />
                 </div>
 
@@ -1052,7 +1069,9 @@ export default function VerCliente() {
                     <option value="">{policyOptions.length ? "Selecciona una póliza" : "No hay pólizas disponibles"}</option>
                     {policyOptions.map((policy) => (
                       <option key={policy.id} value={policy.id}>
-                        {policy.type ?? "Póliza"} · {insurerNameById(policy.insurer_id)}
+                        {(policy.type ?? "Póliza") +
+                          (policy.policy_number ? ` #${policy.policy_number}` : "") +
+                          ` · ${insurerNameById(policy.insurer_id)}`}
                       </option>
                     ))}
                   </select>

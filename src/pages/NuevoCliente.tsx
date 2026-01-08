@@ -107,6 +107,7 @@ export default function NuevoCliente() {
   const [policyForm, setPolicyForm] = useState({
     insurerId: "",
     type: "",
+    policyNumber: "",
     status: POLICY_STATUSES[0],
     premium: "",
     nextRenewal: "",
@@ -293,6 +294,7 @@ export default function NuevoCliente() {
           await apiCreatePolicy(
             {
               type: policyForm.type.trim(),
+              policy_number: policyForm.policyNumber.trim() || null,
               insurer_id: policyForm.insurerId,
               status: policyForm.status || null,
               premium: policyForm.premium ? Number(policyForm.premium) : null,
@@ -787,6 +789,18 @@ export default function NuevoCliente() {
                 onChange={(event) => setPolicyForm((prev) => ({ ...prev, type: event.target.value }))}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 placeholder="Ej: Automotor"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Número de póliza
+              </label>
+              <input
+                value={policyForm.policyNumber}
+                onChange={(event) => setPolicyForm((prev) => ({ ...prev, policyNumber: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="Ej: POL-2024-0098"
               />
             </div>
 

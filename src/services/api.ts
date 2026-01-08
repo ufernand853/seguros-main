@@ -167,6 +167,7 @@ export type ContactInfo = { id?: string; name?: string; email?: string | null; p
 export type PolicySummary = {
   id: string;
   type?: string | null;
+  policy_number?: string | null;
   insurer_id?: string | null;
   insurer?: string | null;
   status?: string | null;
@@ -436,6 +437,7 @@ export type PolicyRoles = {
 export type PolicyItem = {
   id: string;
   type?: string | null;
+  policy_number?: string | null;
   insurer_id?: string | null;
   status?: string | null;
   premium?: number | null;
@@ -445,6 +447,7 @@ export type PolicyItem = {
 
 export type CreatePolicyPayload = {
   type?: string | null;
+  policy_number?: string | null;
   insurer_id?: string | null;
   status?: string | null;
   premium?: number | null;

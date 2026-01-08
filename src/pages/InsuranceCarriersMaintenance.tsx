@@ -126,6 +126,7 @@ export default function InsuranceCarriersMaintenance() {
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [policies, setPolicies] = useState<PolicyItem[]>([]);
   const [search, setSearch] = useState("");
+  const [policySearch, setPolicySearch] = useState("");
   const [estado, setEstado] = useState<string>("todos");
   const [ramo, setRamo] = useState<string>("todos");
   const [selectedId, setSelectedId] = useState<string>("");
@@ -161,6 +162,7 @@ export default function InsuranceCarriersMaintenance() {
   const [editedCarrier, setEditedCarrier] = useState<Carrier | null>(null);
   const [policyForm, setPolicyForm] = useState({
     type: "",
+    policyNumber: "",
     status: POLICY_STATUSES[0],
     premium: "",
     nextRenewal: "",
@@ -260,10 +262,22 @@ export default function InsuranceCarriersMaintenance() {
     () => policies.filter((policy) => policy.insurer_id === selectedCarrier?.id),
     [policies, selectedCarrier?.id],
   );
+  const filteredPolicies = useMemo(() => {
+    const q = policySearch.trim().toLowerCase();
+    if (!q) return associatedPolicies;
+    return associatedPolicies.filter((policy) => {
+      return (
+        (policy.policy_number ?? "").toLowerCase().includes(q) ||
+        (policy.type ?? "").toLowerCase().includes(q) ||
+        policy.id.toLowerCase().includes(q)
+      );
+    });
+  }, [associatedPolicies, policySearch]);
 
   useEffect(() => {
     setPolicyForm({
       type: "",
+      policyNumber: "",
       status: POLICY_STATUSES[0],
       premium: "",
       nextRenewal: "",
@@ -271,6 +285,7 @@ export default function InsuranceCarriersMaintenance() {
     setEditingPolicy(null);
     setPolicyError(null);
     setPolicySuccess(null);
+    setPolicySearch("");
   }, [selectedCarrier?.id]);
 
   const handleAddRamoOption = () => {
@@ -407,6 +422,7 @@ export default function InsuranceCarriersMaintenance() {
     setEditingPolicy(policy);
     setPolicyForm({
       type: policy.type ?? "",
+      policyNumber: policy.policy_number ?? "",
       status: policy.status ?? POLICY_STATUSES[0],
       premium: policy.premium ? String(policy.premium) : "",
       nextRenewal: policy.next_renewal ?? "",
@@ -419,6 +435,7 @@ export default function InsuranceCarriersMaintenance() {
     setEditingPolicy(null);
     setPolicyForm({
       type: "",
+      policyNumber: "",
       status: POLICY_STATUSES[0],
       premium: "",
       nextRenewal: "",
@@ -439,6 +456,7 @@ export default function InsuranceCarriersMaintenance() {
     try {
       const payload = {
         type: policyForm.type.trim(),
+        policy_number: policyForm.policyNumber.trim() || null,
         insurer_id: selectedCarrier.id,
         status: policyForm.status || null,
         premium: policyForm.premium ? Number(policyForm.premium) : null,
@@ -1329,8 +1347,23 @@ export default function InsuranceCarriersMaintenance() {
                     </p>
                   </div>
                   <span className="text-xs font-semibold text-slate-600">
-                    {associatedPolicies.length} póliza(s)
+                    {filteredPolicies.length}
+                    {policySearch.trim() ? ` de ${associatedPolicies.length}` : ""} póliza(s)
                   </span>
+                </div>
+
+                <div className="mt-3">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="policy-search">
+                    Buscar por número de póliza
+                  </label>
+                  <input
+                    id="policy-search"
+                    type="search"
+                    value={policySearch}
+                    onChange={(event) => setPolicySearch(event.target.value)}
+                    placeholder="Ej: POL-2024-0098"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
                 </div>
 
                 {isLoadingPolicies && (
@@ -1345,11 +1378,15 @@ export default function InsuranceCarriersMaintenance() {
                   </div>
                 )}
 
-                {associatedPolicies.length === 0 ? (
-                  <p className="mt-3 text-xs text-slate-500">No hay pólizas asociadas todavía.</p>
+                {filteredPolicies.length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-500">
+                    {associatedPolicies.length === 0
+                      ? "No hay pólizas asociadas todavía."
+                      : "No hay pólizas que coincidan con la búsqueda."}
+                  </p>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    {associatedPolicies.map((policy) => (
+                    {filteredPolicies.map((policy) => (
                       <div
                         key={policy.id}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2"
@@ -1357,6 +1394,9 @@ export default function InsuranceCarriersMaintenance() {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <div className="text-sm font-semibold text-slate-800">{policy.type ?? "Póliza"}</div>
+                            {policy.policy_number && (
+                              <div className="text-xs text-slate-500">Número: {policy.policy_number}</div>
+                            )}
                             <div className="text-xs text-slate-500">
                               Estado: {policy.status ?? "Sin estado"} · Renovación:{" "}
                               {policy.next_renewal ? formatDate(policy.next_renewal) : "Sin fecha"}
@@ -1402,6 +1442,15 @@ export default function InsuranceCarriersMaintenance() {
                         onChange={(event) => setPolicyForm((prev) => ({ ...prev, type: event.target.value }))}
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                         placeholder="Ej: Automotor total"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Número de póliza
+                      <input
+                        value={policyForm.policyNumber}
+                        onChange={(event) => setPolicyForm((prev) => ({ ...prev, policyNumber: event.target.value }))}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                        placeholder="Ej: POL-2024-0098"
                       />
                     </label>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -161,6 +161,7 @@ export default function ClientDetail() {
                     <thead>
                       <tr className="bg-slate-50">
                         <th className="text-left px-3 py-2 font-semibold text-slate-700">Producto</th>
+                        <th className="text-left px-3 py-2 font-semibold text-slate-700">Número de póliza</th>
                         <th className="text-left px-3 py-2 font-semibold text-slate-700">Aseguradora</th>
                         <th className="text-left px-3 py-2 font-semibold text-slate-700">Estado</th>
                         <th className="text-left px-3 py-2 font-semibold text-slate-700">Rol</th>
@@ -256,6 +257,7 @@ function PolicyRow({ policy }: { policy: PolicySummary }) {
   return (
     <tr className="hover:bg-slate-50">
       <td className="px-3 py-2 text-slate-800">{policy.type ?? "—"}</td>
+      <td className="px-3 py-2 text-slate-700">{policy.policy_number ?? "—"}</td>
       <td className="px-3 py-2 text-slate-700">{policy.insurer ?? policy.insurer_id ?? "—"}</td>
       <td className="px-3 py-2">
         <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
