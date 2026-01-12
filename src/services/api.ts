@@ -808,6 +808,18 @@ export async function apiListClaimDocuments(
   });
 }
 
+export async function apiDownloadClaimDocument(
+  claimId: string,
+  documentId: string,
+  accessToken: string,
+): Promise<Blob> {
+  return requestBlob(`/claims/${encodePathSegment(claimId)}/documents/${encodePathSegment(documentId)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export async function apiUploadClaimDocuments(
   claimId: string,
   documents: ClaimDocumentUpload[],
