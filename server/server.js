@@ -538,8 +538,16 @@ api.get("/clients", authenticate, async (_req, res) => {
 
 async function aggregateClaims(filter = {}) {
   const db = getDb();
+  const activeClaimsFilter = {
+    $and: [
+      filter,
+      {
+        $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }],
+      },
+    ],
+  };
   const pipeline = [
-    { $match: filter },
+    { $match: activeClaimsFilter },
     {
       $lookup: {
         from: "clients",
@@ -608,6 +616,7 @@ async function aggregateClaims(filter = {}) {
         notes: 1,
         contact_email: 1,
         contact_phone: 1,
+        deleted_at: 1,
         created_at: 1,
         updated_at: 1,
         client_name: "$client.name",
@@ -681,31 +690,32 @@ api.post("/claims", authenticate, async (req, res) => {
       if (!policy) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
     }
 
-    const claimDoc = {
-      _id: randomUUID(),
-      client_id,
-      policy_id,
-      policy_type: policy.type ?? null,
-      insurer_id: policy.insurer_id ?? null,
-      type,
-      event_date: eventDateObj,
-      event_time: event_time ?? null,
-      location,
-      description,
-      priority: priority ?? null,
-      channel: channel ?? null,
-      status: "Denuncia ingresada",
-      third_party_damage: !!third_party_damage,
-      tow_needed: !!tow_needed,
-      internal_owner: internal_owner ?? null,
-      notify_client: !!notify_client,
-      notify_broker: !!notify_broker,
-      notes: notes ?? null,
-      contact_email: contact_email ?? null,
-      contact_phone: contact_phone ?? null,
-      created_at: new Date(),
-      updated_at: new Date(),
-    };
+      const claimDoc = {
+        _id: randomUUID(),
+        client_id,
+        policy_id,
+        policy_type: policy.type ?? null,
+        insurer_id: policy.insurer_id ?? null,
+        type,
+        event_date: eventDateObj,
+        event_time: event_time ?? null,
+        location,
+        description,
+        priority: priority ?? null,
+        channel: channel ?? null,
+        status: "Denuncia ingresada",
+        third_party_damage: !!third_party_damage,
+        tow_needed: !!tow_needed,
+        internal_owner: internal_owner ?? null,
+        notify_client: !!notify_client,
+        notify_broker: !!notify_broker,
+        notes: notes ?? null,
+        contact_email: contact_email ?? null,
+        contact_phone: contact_phone ?? null,
+        deleted_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
 
     await db.collection("claims").insertOne(claimDoc);
     const [item] = await aggregateClaims({ _id: claimDoc._id });
@@ -715,6 +725,121 @@ api.post("/claims", authenticate, async (req, res) => {
     res.status(500).json({ error: "No se pudo registrar el siniestro" });
   }
 });
+
+api.patch("/claims/:id", authenticate, async (req, res) => {
+  const claimId = req.params.id;
+  const {
+    client_id,
+    policy_id,
+    type,
+    event_date,
+    event_time,
+    location,
+    description,
+    priority,
+    channel,
+    internal_owner,
+    third_party_damage,
+    tow_needed,
+    notify_client,
+    notify_broker,
+    notes,
+    contact_email,
+    contact_phone,
+  } = req.body || {};
+
+  if (!client_id || !policy_id || !type || !event_date || !location || !description) {
+    return res.status(400).json({ error: "Cliente, póliza, tipo, fecha, ubicación y descripción son obligatorios" });
+  }
+
+  const eventDateObj = new Date(event_date);
+  if (Number.isNaN(eventDateObj.getTime())) {
+    return res.status(400).json({ error: "La fecha del siniestro no es válida" });
+  }
+
+  try {
+    const db = getDb();
+    const claimIds = buildIdList(claimId);
+    const claim = await db.collection("claims").findOne({ _id: { $in: claimIds } });
+    if (!claim || claim.deleted_at) return res.status(404).json({ error: "Siniestro no encontrado" });
+
+    const clientIds = buildIdList(client_id);
+    const client = await db.collection("clients").findOne({ _id: { $in: clientIds } });
+    if (!client) return res.status(404).json({ error: "Cliente no encontrado" });
+
+    const policyDoc = await db.collection("policies").findOne({ _id: policy_id });
+    let policy = policyDoc;
+
+    if (policyDoc) {
+      const link = await db.collection("policy_clients").findOne({
+        policy_id,
+        client_id: { $in: clientIds },
+      });
+      if (!link) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
+    } else {
+      policy = (client.policies ?? []).find((p) => p.id === policy_id);
+      if (!policy) return res.status(400).json({ error: "La póliza indicada no pertenece al cliente" });
+    }
+
+    const updatePayload = {
+      client_id,
+      policy_id,
+      policy_type: policy?.type ?? null,
+      insurer_id: policy?.insurer_id ?? null,
+      type,
+      event_date: eventDateObj,
+      event_time: event_time ?? null,
+      location,
+      description,
+      priority: priority ?? null,
+      channel: channel ?? null,
+      internal_owner: internal_owner ?? null,
+      third_party_damage: !!third_party_damage,
+      tow_needed: !!tow_needed,
+      notify_client: !!notify_client,
+      notify_broker: !!notify_broker,
+      notes: notes ?? null,
+      contact_email: contact_email ?? null,
+      contact_phone: contact_phone ?? null,
+      updated_at: new Date(),
+    };
+
+    await db.collection("claims").updateOne({ _id: { $in: claimIds } }, { $set: updatePayload });
+    const [item] = await aggregateClaims({ _id: { $in: claimIds } });
+    res.json({ item: item ?? mapDocument({ ...claim, ...updatePayload }) });
+  } catch (err) {
+    console.error("[claims update]", err);
+    res.status(500).json({ error: "No se pudo actualizar el siniestro" });
+  }
+});
+
+const archiveClaim = async (req, res) => {
+  const claimId = req.params.id;
+  try {
+    const db = getDb();
+    const claimIds = buildIdList(claimId);
+    const claim = await db.collection("claims").findOne({ _id: { $in: claimIds } });
+    if (!claim || claim.deleted_at) return res.status(404).json({ error: "Siniestro no encontrado" });
+
+    await db.collection("claims").updateOne(
+      { _id: { $in: claimIds } },
+      {
+        $set: {
+          deleted_at: new Date(),
+          status: "Eliminado",
+          updated_at: new Date(),
+        },
+      },
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[claims archive]", err);
+    res.status(500).json({ error: "No se pudo eliminar el siniestro" });
+  }
+};
+
+api.patch("/claims/:id/archive", authenticate, archiveClaim);
+api.post("/claims/:id/archive", authenticate, archiveClaim);
 
 api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
   const claimId = req.params.id;
