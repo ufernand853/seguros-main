@@ -19,13 +19,19 @@ export type DocumentAttachment = {
   label?: string;
 };
 
+export type UploadConfirmResult = {
+  successMessage?: string;
+};
+
 type UploadModalProps = {
   open: boolean;
   title?: string;
   initialFiles?: DocumentAttachment[];
   categories?: DocumentCategoryOption[];
   onClose: () => void;
-  onConfirm: (files: DocumentAttachment[]) => void | Promise<void>;
+  onConfirm: (
+    files: DocumentAttachment[]
+  ) => void | UploadConfirmResult | Promise<void | UploadConfirmResult>;
 };
 
 export default function UploadModal({
@@ -92,9 +98,9 @@ export default function UploadModal({
 
   const handleConfirm = async () => {
     try {
-      await onConfirm(files);
+      const result = await onConfirm(files);
       if (files.length > 0) {
-        window.alert("El documento se ha adjuntado correctamente.");
+        window.alert(result?.successMessage ?? "El documento se ha adjuntado correctamente.");
       }
     } catch (err) {
       const message =

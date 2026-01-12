@@ -1631,12 +1631,15 @@ export default function InsuranceCarriersMaintenance() {
         initialFiles={activePolicyAttachments}
         onClose={() => setActivePolicyId(null)}
         onConfirm={(files) => {
+          let successMessage = "Documentos agregados a la póliza. Se guardan en esta sesión.";
           if (activePolicyId === DRAFT_POLICY_ID) {
             setDraftPolicyAttachments(files);
+            successMessage = "Documentos agregados al borrador. Se guardarán al crear la póliza.";
           } else if (activePolicyId) {
             setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
           }
           setActivePolicyId(null);
+          return { successMessage };
         }}
       />
     </div>

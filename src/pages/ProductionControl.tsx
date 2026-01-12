@@ -185,6 +185,9 @@ export default function ProductionControl() {
       [producerId]: files,
     }));
     setActiveProducerId(null);
+    return {
+      successMessage: "Documentos agregados al productor. Se guardan en esta sesión.",
+    };
   };
 
   return (

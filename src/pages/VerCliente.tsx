@@ -1343,7 +1343,9 @@ export default function VerCliente() {
           if (activePolicyId === DRAFT_POLICY_ID) {
             setNewPolicyAttachments(files);
             setActivePolicyId(null);
-            return;
+            return {
+              successMessage: "Documentos agregados al borrador. Se guardarán al crear la póliza.",
+            };
           }
           return handleConfirmPolicyAttachments(activePolicyId, files);
         }}

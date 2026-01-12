@@ -943,6 +943,9 @@ export default function NuevoCliente() {
         onConfirm={(files) => {
           setPolicyAttachments(files);
           setShowPolicyDocsModal(false);
+          return {
+            successMessage: "Documentos agregados. Se guardarán al crear el cliente.",
+          };
         }}
       />
       <UploadModal
@@ -954,6 +957,9 @@ export default function NuevoCliente() {
         onConfirm={(files) => {
           setForm((s) => ({ ...s, docFiles: files }));
           setShowDocModal(false);
+          return {
+            successMessage: "Documentos agregados. Se guardarán al crear el cliente.",
+          };
         }}
       />
 
@@ -966,6 +972,9 @@ export default function NuevoCliente() {
         onConfirm={(files) => {
           setForm((s) => ({ ...s, otherDocs: files }));
           setShowOtherDocsModal(false);
+          return {
+            successMessage: "Documentos agregados. Se guardarán al crear el cliente.",
+          };
         }}
       />
     </div>
