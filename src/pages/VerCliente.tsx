@@ -1,7 +1,11 @@
 // src/pages/VerCliente.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
+import UploadModal, {
+  DEFAULT_DOCUMENT_CATEGORIES,
+  type DocumentAttachment,
+} from "../components/UploadModal";
 import ViewFilesModal from "../components/ViewFilesModal";
 import type { ViewFileItem } from "../components/ViewFilesModal";
 import {
@@ -60,6 +64,7 @@ const ROLE_OPTIONS = [
   { value: "cesionarios", label: "Cesionario" },
 ];
 const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
+const DRAFT_POLICY_ID = "draft-policy";
 const FIGURA_APODERADO_OPTIONS = ["Empresa", "Particular"];
 const TIPO_PERSONA_OPTIONS = ["Persona física", "Persona jurídica"];
 const DOCUMENTO_APODERADO_OPTIONS = ["DNI", "Pasaporte"];
@@ -118,6 +123,23 @@ export default function VerCliente() {
   const [selectedRole, setSelectedRole] = useState(ROLE_OPTIONS[0].value);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySuccess, setPolicySuccess] = useState<string | null>(null);
+  const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
+  const [policyAttachments, setPolicyAttachments] = useState<Record<string, DocumentAttachment[]>>({});
+  const [newPolicyAttachments, setNewPolicyAttachments] = useState<DocumentAttachment[]>([]);
+
+  const policyCategoryLabels = useMemo(
+    () =>
+      DEFAULT_DOCUMENT_CATEGORIES.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    [],
+  );
+  const activePolicyAttachments = useMemo(() => {
+    if (!activePolicyId) return [];
+    if (activePolicyId === DRAFT_POLICY_ID) return newPolicyAttachments;
+    return policyAttachments[activePolicyId] ?? [];
+  }, [activePolicyId, newPolicyAttachments, policyAttachments]);
   const [isPolicySaving, setPolicySaving] = useState(false);
   const [policyForm, setPolicyForm] = useState({
     insurerId: "",
@@ -431,7 +453,7 @@ export default function VerCliente() {
 
     setPolicySaving(true);
     try {
-      await apiCreatePolicy(
+      const createdPolicy = await apiCreatePolicy(
         {
           type: policyForm.type.trim(),
           policy_number: policyForm.policyNumber.trim() || null,
@@ -450,6 +472,11 @@ export default function VerCliente() {
       ]);
       setPolicies(clientData.policies ?? []);
       setAvailablePolicies(policiesResponse.items ?? []);
+
+      if (newPolicyAttachments.length) {
+        setPolicyAttachments((prev) => ({ ...prev, [createdPolicy.id]: newPolicyAttachments }));
+        setNewPolicyAttachments([]);
+      }
 
       setPolicyForm((prev) => ({ ...prev, type: "", policyNumber: "", premium: "", nextRenewal: "" }));
       setPolicySuccess("Póliza creada y asociada al cliente.");
@@ -927,17 +954,54 @@ export default function VerCliente() {
                 <p className="mt-3 text-sm text-slate-500">Este cliente aún no tiene pólizas asociadas.</p>
               ) : (
                 <ul className="mt-3 space-y-2">
-                  {policies.map((policy) => (
-                    <li key={policy.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                      <div className="text-sm font-semibold text-slate-800">{policy.type ?? "Póliza"}</div>
-                      {policy.policy_number && (
-                        <div className="text-xs text-slate-500">Número: {policy.policy_number}</div>
-                      )}
-                      <div className="text-xs text-slate-500">
-                        {policy.insurer ?? insurerNameById(policy.insurer_id)} · {policy.status ?? "Sin estado"}
-                      </div>
-                    </li>
-                  ))}
+                  {policies.map((policy) => {
+                    const policyDocs = policyAttachments[policy.id] ?? [];
+                    return (
+                      <li key={policy.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-800">{policy.type ?? "Póliza"}</div>
+                            {policy.policy_number && (
+                              <div className="text-xs text-slate-500">Número: {policy.policy_number}</div>
+                            )}
+                            <div className="text-xs text-slate-500">
+                              {policy.insurer ?? insurerNameById(policy.insurer_id)} · {policy.status ?? "Sin estado"}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActivePolicyId(policy.id)}
+                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                          >
+                            {policyDocs.length ? "Documentos" : "Adjuntar documentos"}
+                          </button>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          {policyDocs.length ? (
+                            <ul className="space-y-1">
+                              {policyDocs.map((attachment, index) => (
+                                <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                    {policyCategoryLabels[attachment.category] ?? attachment.category}
+                                  </span>
+                                  {attachment.label?.trim() ? (
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                      {attachment.label}
+                                    </span>
+                                  ) : null}
+                                  <span className="truncate text-slate-500" title={attachment.file.name}>
+                                    {attachment.file.name}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            "Sin documentos adjuntos."
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -1033,6 +1097,44 @@ export default function VerCliente() {
                     value={policyForm.nextRenewal}
                     onChange={(event) => setPolicyForm((prev) => ({ ...prev, nextRenewal: event.target.value }))}
                   />
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-600">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800">Documentos de la póliza</h4>
+                    <p className="text-xs text-slate-500">Adjunta respaldos antes de crear la póliza.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActivePolicyId(DRAFT_POLICY_ID)}
+                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    {newPolicyAttachments.length ? "Gestionar adjuntos" : "Adjuntar documentos"}
+                  </button>
+                </div>
+                <div className="mt-2">
+                  {newPolicyAttachments.length ? (
+                    <ul className="space-y-1">
+                      {newPolicyAttachments.map((attachment, index) => (
+                        <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            {policyCategoryLabels[attachment.category] ?? attachment.category}
+                          </span>
+                          {attachment.label?.trim() ? (
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              {attachment.label}
+                            </span>
+                          ) : null}
+                          <span className="truncate text-slate-500" title={attachment.file.name}>
+                            {attachment.file.name}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-slate-400">No hay documentos adjuntos todavía.</p>
+                  )}
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between">
@@ -1168,6 +1270,21 @@ export default function VerCliente() {
       </div>
 
       {/* Modales SOLO lectura */}
+      <UploadModal
+        open={Boolean(activePolicyId)}
+        title="Adjuntar documentos a póliza"
+        categories={DEFAULT_DOCUMENT_CATEGORIES}
+        initialFiles={activePolicyAttachments}
+        onClose={() => setActivePolicyId(null)}
+        onConfirm={(files) => {
+          if (activePolicyId === DRAFT_POLICY_ID) {
+            setNewPolicyAttachments(files);
+          } else if (activePolicyId) {
+            setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
+          }
+          setActivePolicyId(null);
+        }}
+      />
       <ViewFilesModal
         open={showDocModal}
         title="Documento(s) - Identificación / RUT"
