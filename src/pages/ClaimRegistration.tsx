@@ -96,15 +96,16 @@ export default function ClaimRegistration() {
     if (!claimForm.poliza) return [];
     return policyDocuments[claimForm.poliza] ?? [];
   }, [claimForm.poliza, policyDocuments]);
-  const formatPolicyLabel = (policy?: PolicySummary) =>
-    [
+  const formatPolicyLabel = (policy?: PolicySummary) => {
+    const policyNumber = policy?.policy_number ?? policy?.id;
+    return [
       policy?.type ?? "Póliza",
-      policy?.policy_number ? `#${policy.policy_number}` : null,
+      policyNumber ? `Nº ${policyNumber}` : "Nº sin definir",
       policy?.insurer ? `· ${policy.insurer}` : null,
-      policy?.id ? `(${policy.id})` : null,
     ]
       .filter(Boolean)
       .join(" ");
+  };
   const formatDate = (value?: string | null) => {
     if (!value) return "—";
     const parsed = new Date(value);
