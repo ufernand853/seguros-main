@@ -780,6 +780,60 @@ export type ClaimItem = {
   created_at?: string | null;
 };
 
+export type ClaimDocumentItem = {
+  id: string;
+  claim_id?: string | null;
+  name: string;
+  size?: number | null;
+  type?: string | null;
+  category?: string | null;
+  label?: string | null;
+  created_at?: string | null;
+};
+
+export type ClaimDocumentUpload = {
+  file: File;
+  category?: string;
+  label?: string;
+};
+
+export async function apiListClaimDocuments(
+  claimId: string,
+  accessToken: string,
+): Promise<{ items: ClaimDocumentItem[] }> {
+  return request(`/claims/${encodePathSegment(claimId)}/documents`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiUploadClaimDocuments(
+  claimId: string,
+  documents: ClaimDocumentUpload[],
+  accessToken: string,
+): Promise<{ items: ClaimDocumentItem[] }> {
+  const payload = await Promise.all(
+    documents.map(async (doc) => ({
+      name: doc.file.name,
+      size: doc.file.size,
+      type: doc.file.type || "application/octet-stream",
+      category: doc.category ?? "otros",
+      label: doc.label ?? "",
+      content_base64: await readFileAsBase64(doc.file),
+    })),
+  );
+
+  return request(`/claims/${encodePathSegment(claimId)}/documents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ documents: payload }),
+  });
+}
+
 export type CreateClaimPayload = {
   client_id: string;
   policy_id: string;

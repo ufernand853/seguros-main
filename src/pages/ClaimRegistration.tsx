@@ -5,12 +5,15 @@ import { useAuth } from "../auth/AuthProvider";
 import {
   apiCreateClaim,
   apiCreatePolicy,
+  apiListClaimDocuments,
   apiListClaims,
   apiListClients,
   apiListInsurers,
   apiListPolicyDocuments,
+  apiUploadClaimDocuments,
   apiUploadPolicyDocuments,
   type CreateClaimPayload,
+  type ClaimDocumentItem,
   type ClaimItem,
   type ClientListItem,
   type InsurerListItem,
@@ -39,6 +42,14 @@ const EVENT_TYPES = ["Automotor", "Hogar", "Accidentes personales", "Responsabil
 const PRIORITIES = ["Alta", "Media", "Baja"];
 const NOTIFICATION_CHANNELS = ["WhatsApp", "Email", "Teléfono"];
 const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
+const CLAIM_DOCUMENT_CATEGORIES = [
+  { value: "fotos", label: "Fotos del evento" },
+  { value: "denunciaPolicial", label: "Denuncia policial" },
+  { value: "cedula", label: "Cédula y licencia" },
+  { value: "informeMedico", label: "Informe médico" },
+  { value: "presupuesto", label: "Presupuesto reparación" },
+  { value: "otros", label: "Otros" },
+];
 
 export default function ClaimRegistration() {
   const { token } = useAuth();
@@ -82,7 +93,9 @@ export default function ClaimRegistration() {
     informeMedico: false,
     presupuesto: false,
   });
+  const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
   const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
+  const [claimDocuments, setClaimDocuments] = useState<Record<string, ClaimDocumentItem[]>>({});
   const [policyDocuments, setPolicyDocuments] = useState<Record<string, PolicyDocumentItem[]>>({});
 
   const [isLoadingData, setLoadingData] = useState(false);
@@ -130,6 +143,14 @@ export default function ClaimRegistration() {
         return acc;
       }, {}),
     [policyDocumentCategories]
+  );
+  const claimCategoryLabels = useMemo(
+    () =>
+      CLAIM_DOCUMENT_CATEGORIES.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    []
   );
 
   const syncFormWithClient = (clientsFromApi: ClientWithPolicies[]) => {
@@ -189,6 +210,24 @@ export default function ClaimRegistration() {
     }
   };
 
+  const loadClaimDocuments = async (claimList: ClaimRecord[]) => {
+    if (!token || claimList.length === 0) return;
+    const results = await Promise.allSettled(
+      claimList.map((claim) => apiListClaimDocuments(claim.id, token)),
+    );
+    const nextDocuments: Record<string, ClaimDocumentItem[]> = {};
+    results.forEach((result, index) => {
+      const claimId = claimList[index]?.id;
+      if (!claimId) return;
+      if (result.status === "fulfilled") {
+        nextDocuments[claimId] = result.value.items ?? [];
+      }
+    });
+    if (Object.keys(nextDocuments).length) {
+      setClaimDocuments((prev) => ({ ...prev, ...nextDocuments }));
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     setLoadingData(true);
@@ -211,6 +250,7 @@ export default function ClaimRegistration() {
 
         const mappedClaims = (claimsResponse.items ?? []).map((item: ClaimItem) => mapClaimFromApi(item));
         setClaims(mappedClaims);
+        void loadClaimDocuments(mappedClaims);
         setInsurers(insurersResponse.items ?? []);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los datos de siniestros"))
@@ -226,7 +266,35 @@ export default function ClaimRegistration() {
     setDocumentChecklist((current) => ({ ...current, [field]: !current[field] }));
   };
 
+  const closeClaimModal = () => setActiveClaimId(null);
   const closePolicyModal = () => setActivePolicyId(null);
+
+  const handleConfirmClaimAttachments = async (files: DocumentAttachment[]) => {
+    if (!activeClaimId) return;
+    if (!token) {
+      setActiveClaimId(null);
+      throw new Error("Debes iniciar sesión para adjuntar documentos.");
+    }
+
+    const claimId = activeClaimId;
+    if (files.length === 0) {
+      setActiveClaimId(null);
+      return;
+    }
+
+    try {
+      const response = await apiUploadClaimDocuments(claimId, files, token);
+      setClaimDocuments((prev) => ({
+        ...prev,
+        [claimId]: [...(prev[claimId] ?? []), ...(response.items ?? [])],
+      }));
+      return {
+        successMessage: "Documentos agregados al siniestro. Se guardaron correctamente.",
+      };
+    } finally {
+      setActiveClaimId(null);
+    }
+  };
 
   const handleConfirmPolicyAttachments = async (files: DocumentAttachment[]) => {
     if (!activePolicyId) return;
@@ -1030,6 +1098,38 @@ export default function ClaimRegistration() {
                 Checklist: {checklistCount.ready}/{checklistCount.total} completado · Responsable: {claimForm.responsableInterno}
               </p>
             </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-900">Documentos de la póliza</span>
+                <span className="text-xs text-slate-500">{selectedPolicyDocuments.length} adjunto(s)</span>
+              </div>
+              <div className="mt-2">
+                {selectedPolicyDocuments.length ? (
+                  <ul className="space-y-2 text-xs text-slate-600">
+                    {selectedPolicyDocuments.map((attachment) => (
+                      <li
+                        key={attachment.id}
+                        className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "otros"}
+                        </span>
+                        {attachment.label?.trim() ? (
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            {attachment.label}
+                          </span>
+                        ) : null}
+                        <span className="truncate text-slate-500" title={attachment.name}>
+                          {attachment.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-400">No hay documentos adjuntos para esta póliza.</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 space-y-4">
@@ -1066,6 +1166,42 @@ export default function ClaimRegistration() {
                       <span>Canal: {claim.canal ?? "—"}</span>
                       <span>Prioridad: {claim.prioridad ?? "—"}</span>
                     </div>
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span className="font-semibold text-slate-700">Documentos del siniestro</span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveClaimId(claim.id)}
+                          className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-2 py-1 text-[11px] font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                        >
+                          {claimDocuments[claim.id]?.length ? "Gestionar adjuntos" : "Cargar documentos"}
+                        </button>
+                      </div>
+                      <div className="mt-2">
+                        {claimDocuments[claim.id]?.length ? (
+                          <ul className="space-y-2 text-[11px] text-slate-600">
+                            {(claimDocuments[claim.id] ?? []).map((attachment) => (
+                              <li
+                                key={attachment.id}
+                                className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1"
+                              >
+                                <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
+                                  {claimCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "otros"}
+                                </span>
+                                {attachment.label?.trim() ? (
+                                  <span className="uppercase tracking-wide text-slate-500">{attachment.label}</span>
+                                ) : null}
+                                <span className="truncate text-slate-500" title={attachment.name}>
+                                  {attachment.name}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[11px] text-slate-400">No hay documentos adjuntos para este siniestro.</p>
+                        )}
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -1074,6 +1210,14 @@ export default function ClaimRegistration() {
         </div>
       </section>
 
+      <UploadModal
+        open={Boolean(activeClaimId)}
+        title="Adjuntar documentos a siniestro"
+        categories={CLAIM_DOCUMENT_CATEGORIES}
+        initialFiles={[]}
+        onClose={closeClaimModal}
+        onConfirm={handleConfirmClaimAttachments}
+      />
       <UploadModal
         open={Boolean(activePolicyId)}
         title="Adjuntar documentos a póliza"
