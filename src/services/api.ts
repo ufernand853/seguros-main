@@ -702,6 +702,18 @@ export async function apiListPolicyDocuments(
   });
 }
 
+export async function apiDownloadPolicyDocument(
+  policyId: string,
+  documentId: string,
+  accessToken: string,
+): Promise<Blob> {
+  return requestBlob(`/policies/${encodePathSegment(policyId)}/documents/${encodePathSegment(documentId)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export async function apiUploadPolicyDocuments(
   policyId: string,
   documents: PolicyDocumentUpload[],

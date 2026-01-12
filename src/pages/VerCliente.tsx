@@ -12,6 +12,8 @@ import {
   apiGetClientSummary,
   apiCreatePolicy,
   apiDownloadClientDocument,
+  apiDownloadPolicyDocument,
+  apiDeletePolicyDocument,
   apiListInsurers,
   apiListClientDocuments,
   apiListPolicies,
@@ -480,6 +482,42 @@ export default function VerCliente() {
       throw new Error(message);
     } finally {
       setActivePolicyId(null);
+    }
+  };
+
+  const handleViewPolicyDocument = async (policyId: string, attachment: PolicyDocumentItem) => {
+    if (!token) {
+      setPolicyError("Debes iniciar sesión para ver documentos.");
+      return;
+    }
+
+    try {
+      const blob = await apiDownloadPolicyDocument(policyId, attachment.id, token);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : "No se pudo abrir el documento.");
+    }
+  };
+
+  const handleDeletePolicyDocument = async (policyId: string, attachment: PolicyDocumentItem) => {
+    if (!token) {
+      setPolicyError("Debes iniciar sesión para eliminar documentos.");
+      return;
+    }
+
+    const confirmed = window.confirm(`¿Seguro que quieres eliminar "${attachment.name ?? "este documento"}"?`);
+    if (!confirmed) return;
+
+    try {
+      await apiDeletePolicyDocument(policyId, attachment.id, token);
+      setPolicyDocuments((prev) => ({
+        ...prev,
+        [policyId]: (prev[policyId] ?? []).filter((doc) => doc.id !== attachment.id),
+      }));
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : "No se pudo eliminar el documento.");
     }
   };
 
@@ -1091,18 +1129,42 @@ export default function VerCliente() {
                           {policyDocs.length ? (
                             <ul className="space-y-1">
                               {policyDocs.map((attachment) => (
-                                <li key={attachment.id} className="flex flex-wrap gap-2">
-                                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                    {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "Otros"}
-                                  </span>
-                                  {attachment.label?.trim() ? (
-                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                      {attachment.label}
+                                <li key={attachment.id} className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      {policyCategoryLabels[attachment.category ?? "otros"] ??
+                                        attachment.category ??
+                                        "Otros"}
                                     </span>
-                                  ) : null}
-                                  <span className="truncate text-slate-500" title={attachment.name}>
-                                    {attachment.name}
-                                  </span>
+                                    {attachment.label?.trim() ? (
+                                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                        {attachment.label}
+                                      </span>
+                                    ) : null}
+                                    <span className="truncate text-slate-500" title={attachment.name}>
+                                      {attachment.name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleViewPolicyDocument(policy.id, attachment)}
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-[11px] text-slate-600 hover:bg-slate-100"
+                                      title="Ver documento"
+                                      aria-label="Ver documento"
+                                    >
+                                      🔍
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePolicyDocument(policy.id, attachment)}
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-rose-200 text-[11px] text-rose-600 hover:bg-rose-50"
+                                      title="Eliminar documento"
+                                      aria-label="Eliminar documento"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
                                 </li>
                               ))}
                             </ul>
