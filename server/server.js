@@ -735,7 +735,7 @@ api.get("/claims/:id/documents", authenticate, async (req, res) => {
     const db = getDb();
     const claimIds = buildIdList(claimId);
     const claim = await db.collection("claims").findOne({ _id: { $in: claimIds } });
-    if (!claim) return res.status(404).json({ error: "Siniestro no encontrado" });
+    if (!claim) return res.json({ items: [] });
 
     const rows = await db
       .collection("claim_documents")
