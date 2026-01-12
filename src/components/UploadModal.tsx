@@ -124,7 +124,7 @@ export default function UploadModal({
         isImg,
         category: f.category,
         label: f.label,
-        url: isImg ? URL.createObjectURL(f.file) : "",
+        url: URL.createObjectURL(f.file),
       };
     });
   }, [files]);
@@ -218,6 +218,24 @@ export default function UploadModal({
                         {p.type || "archivo"} · {(p.size / 1024).toFixed(1)} KB
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-100"
+                      >
+                        Ver
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => removeAt(idx)}
+                        className="w-8 h-8 inline-flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        aria-label={`Quitar ${p.name}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
                     <div className="min-w-[160px]">
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
                         Tipo de documento
@@ -245,13 +263,6 @@ export default function UploadModal({
                         placeholder="Ej: Fotos del auto"
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAt(idx)}
-                      className="px-3 py-1 rounded-lg hover:bg-slate-100 text-slate-700"
-                    >
-                      Quitar
-                    </button>
                   </li>
                 ))}
               </ul>
