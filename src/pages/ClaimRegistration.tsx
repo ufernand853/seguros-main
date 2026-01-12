@@ -4,6 +4,7 @@ import type { DocumentAttachment } from "../components/UploadModal";
 import { useAuth } from "../auth/AuthProvider";
 import {
   apiCreateClaim,
+  apiDownloadClaimDocument,
   apiListClaimDocuments,
   apiListClaims,
   apiListClients,
@@ -209,6 +210,22 @@ export default function ClaimRegistration() {
     });
     if (Object.keys(nextDocuments).length) {
       setClaimDocuments((prev) => ({ ...prev, ...nextDocuments }));
+    }
+  };
+
+  const handleViewClaimDocument = async (claimId: string, attachment: ClaimDocumentItem) => {
+    if (!token) {
+      setError("Debes iniciar sesión para ver documentos.");
+      return;
+    }
+
+    try {
+      const blob = await apiDownloadClaimDocument(claimId, attachment.id, token);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo abrir el documento.");
     }
   };
 
@@ -894,38 +911,6 @@ export default function ClaimRegistration() {
                 Checklist: {checklistCount.ready}/{checklistCount.total} completado · Responsable: {claimForm.responsableInterno}
               </p>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-900">Documentos de la póliza</span>
-                <span className="text-xs text-slate-500">{selectedPolicyDocuments.length} adjunto(s)</span>
-              </div>
-              <div className="mt-2">
-                {selectedPolicyDocuments.length ? (
-                  <ul className="space-y-2 text-xs text-slate-600">
-                    {selectedPolicyDocuments.map((attachment) => (
-                      <li
-                        key={attachment.id}
-                        className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                      >
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                          {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "otros"}
-                        </span>
-                        {attachment.label?.trim() ? (
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                            {attachment.label}
-                          </span>
-                        ) : null}
-                        <span className="truncate text-slate-500" title={attachment.name}>
-                          {attachment.name}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-slate-400">No hay documentos adjuntos para esta póliza.</p>
-                )}
-              </div>
-            </div>
           </div>
 
           <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 space-y-4">
@@ -990,6 +975,13 @@ export default function ClaimRegistration() {
                                 <span className="truncate text-slate-500" title={attachment.name}>
                                   {attachment.name}
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewClaimDocument(claim.id, attachment)}
+                                  className="ml-auto inline-flex items-center justify-center rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100"
+                                >
+                                  Ver documento
+                                </button>
                               </li>
                             ))}
                           </ul>
