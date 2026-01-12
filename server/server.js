@@ -15,7 +15,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 
 function verifyPassword(password, stored) {
   if (!stored || !password) return false;
@@ -68,6 +68,20 @@ function mapDocument(doc) {
   if (!doc) return null;
   const { _id, ...rest } = doc;
   return { id: String(_id), ...rest };
+}
+
+function mapPolicyDocument(doc) {
+  if (!doc) return null;
+  return {
+    id: String(doc._id),
+    policy_id: doc.policy_id ?? null,
+    name: doc.name ?? "",
+    size: typeof doc.size === "number" ? doc.size : null,
+    type: doc.type ?? "application/octet-stream",
+    category: doc.category ?? "otros",
+    label: doc.label ?? null,
+    created_at: doc.created_at ?? null,
+  };
 }
 
 function mapClientSummary(client) {
@@ -993,6 +1007,100 @@ api.get("/policies/:id", authenticate, async (req, res) => {
   } catch (err) {
     console.error("[policies detail]", err);
     res.status(500).json({ error: "No se pudo recuperar la póliza" });
+  }
+});
+
+api.get("/policies/:id/documents", authenticate, async (req, res) => {
+  const policyId = req.params.id;
+  try {
+    const db = getDb();
+    const policy = await db.collection("policies").findOne({ _id: policyId });
+    if (!policy) return res.status(404).json({ error: "Póliza no encontrada" });
+
+    const rows = await db
+      .collection("policy_documents")
+      .find({ policy_id: policyId })
+      .sort({ created_at: -1 })
+      .toArray();
+    res.json({ items: rows.map(mapPolicyDocument) });
+  } catch (err) {
+    console.error("[policies documents list]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los documentos" });
+  }
+});
+
+api.post("/policies/:id/documents", authenticate, async (req, res) => {
+  const policyId = req.params.id;
+  const { documents } = req.body || {};
+  if (!Array.isArray(documents) || documents.length === 0) {
+    return res.status(400).json({ error: "Debes enviar documentos para adjuntar" });
+  }
+
+  try {
+    const db = getDb();
+    const policy = await db.collection("policies").findOne({ _id: policyId });
+    if (!policy) return res.status(404).json({ error: "Póliza no encontrada" });
+
+    const now = new Date();
+    const items = documents.map((doc, index) => {
+      const name = typeof doc?.name === "string" ? doc.name.trim() : "";
+      const content = typeof doc?.content_base64 === "string" ? doc.content_base64 : "";
+      if (!name) {
+        throw new Error(`Documento ${index + 1}: nombre inválido`);
+      }
+      if (!content) {
+        throw new Error(`Documento ${index + 1}: contenido vacío`);
+      }
+      const buffer = Buffer.from(content, "base64");
+      return {
+        _id: randomUUID(),
+        policy_id: policyId,
+        name,
+        size: buffer.length,
+        type: typeof doc?.type === "string" && doc.type ? doc.type : "application/octet-stream",
+        category: typeof doc?.category === "string" && doc.category ? doc.category : "otros",
+        label: typeof doc?.label === "string" && doc.label ? doc.label : null,
+        data: buffer,
+        created_at: now,
+      };
+    });
+
+    await db.collection("policy_documents").insertMany(items);
+    res.status(201).json({ items: items.map(mapPolicyDocument) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudieron adjuntar los documentos";
+    console.error("[policies documents create]", err);
+    res.status(400).json({ error: message });
+  }
+});
+
+api.get("/policies/:id/documents/:docId", authenticate, async (req, res) => {
+  const { id: policyId, docId } = req.params;
+  try {
+    const db = getDb();
+    const doc = await db.collection("policy_documents").findOne({ _id: docId, policy_id: policyId });
+    if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+
+    const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data?.buffer ?? doc.data ?? []);
+    res.setHeader("Content-Type", doc.type ?? "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${doc.name ?? "documento"}"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error("[policies documents download]", err);
+    res.status(500).json({ error: "No se pudo descargar el documento" });
+  }
+});
+
+api.delete("/policies/:id/documents/:docId", authenticate, async (req, res) => {
+  const { id: policyId, docId } = req.params;
+  try {
+    const db = getDb();
+    const result = await db.collection("policy_documents").deleteOne({ _id: docId, policy_id: policyId });
+    if (!result.deletedCount) return res.status(404).json({ error: "Documento no encontrado" });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[policies documents delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el documento" });
   }
 });
 

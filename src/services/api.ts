@@ -65,6 +65,19 @@ function encodePathSegment(value: string) {
   return encodeURIComponent(value);
 }
 
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function apiLogin(email: string, password: string): Promise<LoginResponse> {
   return request("/auth/login", {
     method: "POST",
@@ -457,6 +470,23 @@ export type CreatePolicyPayload = {
   cesionarios?: string[];
 };
 
+export type PolicyDocumentItem = {
+  id: string;
+  policy_id?: string | null;
+  name: string;
+  size?: number | null;
+  type?: string | null;
+  category?: string | null;
+  label?: string | null;
+  created_at?: string | null;
+};
+
+export type PolicyDocumentUpload = {
+  file: File;
+  category?: string;
+  label?: string;
+};
+
 export type CreateInsurerPayload = {
   name: string;
   country?: string | null;
@@ -549,6 +579,56 @@ export async function apiUpdatePolicy(
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function apiListPolicyDocuments(
+  policyId: string,
+  accessToken: string,
+): Promise<{ items: PolicyDocumentItem[] }> {
+  return request(`/policies/${encodePathSegment(policyId)}/documents`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiUploadPolicyDocuments(
+  policyId: string,
+  documents: PolicyDocumentUpload[],
+  accessToken: string,
+): Promise<{ items: PolicyDocumentItem[] }> {
+  const payload = await Promise.all(
+    documents.map(async (doc) => ({
+      name: doc.file.name,
+      size: doc.file.size,
+      type: doc.file.type || "application/octet-stream",
+      category: doc.category ?? "otros",
+      label: doc.label ?? "",
+      content_base64: await readFileAsBase64(doc.file),
+    })),
+  );
+
+  return request(`/policies/${encodePathSegment(policyId)}/documents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ documents: payload }),
+  });
+}
+
+export async function apiDeletePolicyDocument(
+  policyId: string,
+  documentId: string,
+  accessToken: string,
+): Promise<{ ok: boolean }> {
+  return request(`/policies/${encodePathSegment(policyId)}/documents/${encodePathSegment(documentId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 
