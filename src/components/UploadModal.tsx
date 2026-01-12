@@ -16,6 +16,7 @@ export const DEFAULT_DOCUMENT_CATEGORIES: DocumentCategoryOption[] = [
 export type DocumentAttachment = {
   file: File;
   category: string;
+  label?: string;
 };
 
 type UploadModalProps = {
@@ -56,6 +57,7 @@ export default function UploadModal({
     const incoming = Array.from(fl).map<DocumentAttachment>((file) => ({
       file,
       category: defaultCategory,
+      label: "",
     }));
     setFiles((prev) => [...prev, ...incoming]);
   };
@@ -82,6 +84,12 @@ export default function UploadModal({
     );
   };
 
+  const updateLabel = (idx: number, label: string) => {
+    setFiles((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, label } : item))
+    );
+  };
+
   const totalSize = useMemo(
     () => files.reduce((acc, f) => acc + (f?.file.size || 0), 0),
     [files]
@@ -96,6 +104,7 @@ export default function UploadModal({
         type: f.file.type || "application/octet-stream",
         isImg,
         category: f.category,
+        label: f.label,
         url: isImg ? URL.createObjectURL(f.file) : "",
       };
     });
@@ -205,6 +214,17 @@ export default function UploadModal({
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div className="min-w-[200px] flex-1">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Literal
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={p.label ?? ""}
+                        onChange={(e) => updateLabel(idx, e.target.value)}
+                        placeholder="Ej: Fotos del auto"
+                      />
                     </div>
                     <button
                       type="button"
