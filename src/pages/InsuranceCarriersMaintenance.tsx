@@ -10,6 +10,7 @@ import {
   apiDeleteInsurer,
   apiListInsurers,
   apiListPolicies,
+  apiUploadPolicyDocuments,
   apiUpdateInsurer,
   apiUpdatePolicy,
   type CreateInsurerPayload,
@@ -495,8 +496,17 @@ export default function InsuranceCarriersMaintenance() {
       } else {
         const createdPolicy = await apiCreatePolicy(payload, token);
         if (draftPolicyAttachments.length) {
-          setPolicyAttachments((prev) => ({ ...prev, [createdPolicy.id]: draftPolicyAttachments }));
-          setDraftPolicyAttachments([]);
+          try {
+            await apiUploadPolicyDocuments(createdPolicy.id, draftPolicyAttachments, token);
+            setPolicyAttachments((prev) => ({ ...prev, [createdPolicy.id]: draftPolicyAttachments }));
+            setDraftPolicyAttachments([]);
+          } catch (err) {
+            setPolicyError(
+              err instanceof Error
+                ? `La póliza se creó, pero no se pudieron adjuntar documentos: ${err.message}`
+                : "La póliza se creó, pero no se pudieron adjuntar documentos.",
+            );
+          }
         }
         setPolicySuccess("Póliza creada y asociada a la aseguradora.");
       }
@@ -1630,16 +1640,32 @@ export default function InsuranceCarriersMaintenance() {
         categories={DEFAULT_DOCUMENT_CATEGORIES}
         initialFiles={activePolicyAttachments}
         onClose={() => setActivePolicyId(null)}
-        onConfirm={(files) => {
-          let successMessage = "Documentos agregados a la póliza. Se guardan en esta sesión.";
+        onConfirm={async (files) => {
           if (activePolicyId === DRAFT_POLICY_ID) {
             setDraftPolicyAttachments(files);
-            successMessage = "Documentos agregados al borrador. Se guardarán al crear la póliza.";
-          } else if (activePolicyId) {
-            setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
+            setActivePolicyId(null);
+            return { successMessage: "Documentos agregados al borrador. Se guardarán al crear la póliza." };
           }
-          setActivePolicyId(null);
-          return { successMessage };
+
+          if (!activePolicyId) return;
+          if (!token) {
+            const message = "Debes iniciar sesión para adjuntar documentos.";
+            setActivePolicyId(null);
+            throw new Error(message);
+          }
+
+          if (files.length === 0) {
+            setActivePolicyId(null);
+            return;
+          }
+
+          try {
+            await apiUploadPolicyDocuments(activePolicyId, files, token);
+            setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
+            return { successMessage: "Documentos agregados a la póliza. Se guardaron correctamente." };
+          } finally {
+            setActivePolicyId(null);
+          }
         }}
       />
     </div>
