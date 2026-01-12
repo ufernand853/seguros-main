@@ -8,6 +8,7 @@ import {
   apiListClaims,
   apiListClients,
   apiListInsurers,
+  apiUploadPolicyDocuments,
   type CreateClaimPayload,
   type ClaimItem,
   type ClientListItem,
@@ -202,17 +203,31 @@ export default function ClaimRegistration() {
 
   const closePolicyModal = () => setActivePolicyId(null);
 
-  const handleConfirmPolicyAttachments = (files: DocumentAttachment[]) => {
+  const handleConfirmPolicyAttachments = async (files: DocumentAttachment[]) => {
     if (!activePolicyId) return;
+    if (!token) {
+      setActivePolicyId(null);
+      throw new Error("Debes iniciar sesión para adjuntar documentos.");
+    }
+
     const policyId = activePolicyId;
-    setPolicyAttachments((prev) => ({
-      ...prev,
-      [policyId]: files,
-    }));
-    setActivePolicyId(null);
-    return {
-      successMessage: "Documentos agregados a la póliza. Se guardan en esta sesión.",
-    };
+    if (files.length === 0) {
+      setActivePolicyId(null);
+      return;
+    }
+
+    try {
+      await apiUploadPolicyDocuments(policyId, files, token);
+      setPolicyAttachments((prev) => ({
+        ...prev,
+        [policyId]: files,
+      }));
+      return {
+        successMessage: "Documentos agregados a la póliza. Se guardaron correctamente.",
+      };
+    } finally {
+      setActivePolicyId(null);
+    }
   };
 
   const handleClientChange = (clientId: string) => {
