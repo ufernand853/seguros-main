@@ -407,8 +407,10 @@ export default function VerCliente() {
 
   const handleConfirmPolicyAttachments = async (policyId: string, files: DocumentAttachment[]) => {
     if (!token) {
-      setPolicyError("Debes iniciar sesión para adjuntar documentos.");
-      return;
+      const message = "Debes iniciar sesión para adjuntar documentos.";
+      setPolicyError(message);
+      setActivePolicyId(null);
+      throw new Error(message);
     }
 
     if (!files.length) {
@@ -423,7 +425,10 @@ export default function VerCliente() {
         [policyId]: [...(prev[policyId] ?? []), ...(response.items ?? [])],
       }));
     } catch (err) {
-      setPolicyError(err instanceof Error ? err.message : "No se pudieron adjuntar los documentos.");
+      const message =
+        err instanceof Error ? err.message : "No se pudieron adjuntar los documentos.";
+      setPolicyError(message);
+      throw new Error(message);
     } finally {
       setActivePolicyId(null);
     }
@@ -1340,7 +1345,7 @@ export default function VerCliente() {
             setActivePolicyId(null);
             return;
           }
-          void handleConfirmPolicyAttachments(activePolicyId, files);
+          return handleConfirmPolicyAttachments(activePolicyId, files);
         }}
       />
       <ViewFilesModal
