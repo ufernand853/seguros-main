@@ -1,4 +1,8 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
+import UploadModal, {
+  DEFAULT_DOCUMENT_CATEGORIES,
+  type DocumentAttachment,
+} from "../components/UploadModal";
 import { useAuth } from "../auth/AuthProvider";
 import {
   apiCreateInsurer,
@@ -39,6 +43,7 @@ type Carrier = {
 
 const ESTADOS: Carrier["estado"][] = ["Activa", "En revisión", "Suspendida"];
 const POLICY_STATUSES = ["Vigente", "En revisión", "Suspendida"];
+const DRAFT_POLICY_ID = "draft-policy";
 const DEFAULT_RAMO_OPTIONS = [
   "Automotor",
   "Hogar",
@@ -169,6 +174,9 @@ export default function InsuranceCarriersMaintenance() {
   });
   const [editingPolicy, setEditingPolicy] = useState<PolicyItem | null>(null);
   const [isPolicySaving, setPolicySaving] = useState(false);
+  const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
+  const [policyAttachments, setPolicyAttachments] = useState<Record<string, DocumentAttachment[]>>({});
+  const [draftPolicyAttachments, setDraftPolicyAttachments] = useState<DocumentAttachment[]>([]);
   const isAdmin = user?.role === "admin";
 
   useEffect(() => {
@@ -225,6 +233,15 @@ export default function InsuranceCarriersMaintenance() {
     return Array.from(byValue.values()).sort((a, b) => a.localeCompare(b, "es"));
   }, [carrierRamos, customRamos]);
 
+  const policyCategoryLabels = useMemo(
+    () =>
+      DEFAULT_DOCUMENT_CATEGORIES.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    [],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return carriers.filter((carrier) => {
@@ -273,6 +290,15 @@ export default function InsuranceCarriersMaintenance() {
       );
     });
   }, [associatedPolicies, policySearch]);
+  const formPolicyAttachments = useMemo(() => {
+    if (editingPolicy) return policyAttachments[editingPolicy.id] ?? [];
+    return draftPolicyAttachments;
+  }, [draftPolicyAttachments, editingPolicy, policyAttachments]);
+  const activePolicyAttachments = useMemo(() => {
+    if (!activePolicyId) return [];
+    if (activePolicyId === DRAFT_POLICY_ID) return draftPolicyAttachments;
+    return policyAttachments[activePolicyId] ?? [];
+  }, [activePolicyId, draftPolicyAttachments, policyAttachments]);
 
   useEffect(() => {
     setPolicyForm({
@@ -467,7 +493,11 @@ export default function InsuranceCarriersMaintenance() {
         await apiUpdatePolicy(editingPolicy.id, payload, token);
         setPolicySuccess("Póliza actualizada correctamente.");
       } else {
-        await apiCreatePolicy(payload, token);
+        const createdPolicy = await apiCreatePolicy(payload, token);
+        if (draftPolicyAttachments.length) {
+          setPolicyAttachments((prev) => ({ ...prev, [createdPolicy.id]: draftPolicyAttachments }));
+          setDraftPolicyAttachments([]);
+        }
         setPolicySuccess("Póliza creada y asociada a la aseguradora.");
       }
 
@@ -1386,47 +1416,80 @@ export default function InsuranceCarriersMaintenance() {
                   </p>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    {filteredPolicies.map((policy) => (
-                      <div
-                        key={policy.id}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-slate-800">{policy.type ?? "Póliza"}</div>
-                            {policy.policy_number && (
-                              <div className="text-xs text-slate-500">Número: {policy.policy_number}</div>
-                            )}
-                            <div className="text-xs text-slate-500">
-                              Estado: {policy.status ?? "Sin estado"} · Renovación:{" "}
-                              {policy.next_renewal ? formatDate(policy.next_renewal) : "Sin fecha"}
+                    {filteredPolicies.map((policy) => {
+                      const policyDocs = policyAttachments[policy.id] ?? [];
+                      return (
+                        <div
+                          key={policy.id}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-800">{policy.type ?? "Póliza"}</div>
+                              {policy.policy_number && (
+                                <div className="text-xs text-slate-500">Número: {policy.policy_number}</div>
+                              )}
+                              <div className="text-xs text-slate-500">
+                                Estado: {policy.status ?? "Sin estado"} · Renovación:{" "}
+                                {policy.next_renewal ? formatDate(policy.next_renewal) : "Sin fecha"}
+                              </div>
+                            </div>
+                            <div className="text-xs font-semibold text-slate-700">
+                              {policy.premium !== null && policy.premium !== undefined
+                                ? formatCurrency(policy.premium, "USD")
+                                : "Sin prima"}
                             </div>
                           </div>
-                        <div className="text-xs font-semibold text-slate-700">
-                          {policy.premium !== null && policy.premium !== undefined
-                              ? formatCurrency(policy.premium, "USD")
-                              : "Sin prima"}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditPolicy(policy)}
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePolicyId(policy.id)}
+                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                            >
+                              {policyDocs.length ? "Documentos" : "Adjuntar documentos"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeactivatePolicy(policy)}
+                              disabled={isPolicySaving || policy.status === "Suspendida"}
+                              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-60"
+                            >
+                              Dar de baja
+                            </button>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            {policyDocs.length ? (
+                              <ul className="space-y-1">
+                                {policyDocs.map((attachment, index) => (
+                                  <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      {policyCategoryLabels[attachment.category] ?? attachment.category}
+                                    </span>
+                                    {attachment.label?.trim() ? (
+                                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                        {attachment.label}
+                                      </span>
+                                    ) : null}
+                                    <span className="truncate text-slate-500" title={attachment.file.name}>
+                                      {attachment.file.name}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              "Sin documentos adjuntos."
+                            )}
+                          </div>
                         </div>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleEditPolicy(policy)}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeactivatePolicy(policy)}
-                            disabled={isPolicySaving || policy.status === "Suspendida"}
-                            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-60"
-                          >
-                            Dar de baja
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1479,17 +1542,55 @@ export default function InsuranceCarriersMaintenance() {
                         />
                       </label>
                     </div>
-                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Próxima renovación
-                      <input
-                        type="date"
-                        value={policyForm.nextRenewal}
-                        onChange={(event) => setPolicyForm((prev) => ({ ...prev, nextRenewal: event.target.value }))}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                      />
-                    </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Próxima renovación
+                    <input
+                      type="date"
+                      value={policyForm.nextRenewal}
+                      onChange={(event) => setPolicyForm((prev) => ({ ...prev, nextRenewal: event.target.value }))}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-600">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h5 className="text-sm font-semibold text-slate-800">Documentos de la póliza</h5>
+                      <p className="text-xs text-slate-500">Adjunta respaldos antes de guardar la póliza.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActivePolicyId(editingPolicy ? editingPolicy.id : DRAFT_POLICY_ID)}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                    >
+                      {formPolicyAttachments.length ? "Gestionar adjuntos" : "Adjuntar documentos"}
+                    </button>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2">
+                    {formPolicyAttachments.length ? (
+                      <ul className="space-y-1">
+                        {formPolicyAttachments.map((attachment, index) => (
+                          <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                              {policyCategoryLabels[attachment.category] ?? attachment.category}
+                            </span>
+                            {attachment.label?.trim() ? (
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                {attachment.label}
+                              </span>
+                            ) : null}
+                            <span className="truncate text-slate-500" title={attachment.file.name}>
+                              {attachment.file.name}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-400">No hay documentos adjuntos todavía.</p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={handleSavePolicy}
@@ -1522,6 +1623,22 @@ export default function InsuranceCarriersMaintenance() {
           )}
         </aside>
       </section>
+
+      <UploadModal
+        open={Boolean(activePolicyId)}
+        title="Adjuntar documentos a póliza"
+        categories={DEFAULT_DOCUMENT_CATEGORIES}
+        initialFiles={activePolicyAttachments}
+        onClose={() => setActivePolicyId(null)}
+        onConfirm={(files) => {
+          if (activePolicyId === DRAFT_POLICY_ID) {
+            setDraftPolicyAttachments(files);
+          } else if (activePolicyId) {
+            setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
+          }
+          setActivePolicyId(null);
+        }}
+      />
     </div>
   );
 }

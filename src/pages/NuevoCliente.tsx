@@ -104,6 +104,8 @@ export default function NuevoCliente() {
   const [isSaving, setSaving] = useState(false);
   const [insurers, setInsurers] = useState<InsurerListItem[]>([]);
   const [isLoadingInsurers, setLoadingInsurers] = useState(false);
+  const [showPolicyDocsModal, setShowPolicyDocsModal] = useState(false);
+  const [policyAttachments, setPolicyAttachments] = useState<DocumentAttachment[]>([]);
   const [policyForm, setPolicyForm] = useState({
     insurerId: "",
     type: "",
@@ -129,6 +131,11 @@ export default function NuevoCliente() {
       })
       .finally(() => setLoadingInsurers(false));
   }, [token]);
+
+  const policyCategoryLabels = DOCUMENT_TYPE_OPTIONS.reduce<Record<string, string>>((acc, option) => {
+    acc[option.value] = option.label;
+    return acc;
+  }, {});
 
   const onChange = (k: keyof NuevoClientePayload, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
@@ -310,6 +317,7 @@ export default function NuevoCliente() {
             },
             token,
           );
+          setPolicyAttachments([]);
         } catch (err) {
           setError(
             err instanceof Error
@@ -853,6 +861,44 @@ export default function NuevoCliente() {
               />
             </div>
           </div>
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Documentos de la póliza</h3>
+                <p className="text-xs text-slate-500">Adjunta respaldos junto con el alta.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPolicyDocsModal(true)}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                {policyAttachments.length ? "Gestionar adjuntos" : "Adjuntar documentos"}
+              </button>
+            </div>
+            <div className="mt-2">
+              {policyAttachments.length ? (
+                <ul className="space-y-1">
+                  {policyAttachments.map((attachment, index) => (
+                    <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        {policyCategoryLabels[attachment.category] ?? attachment.category}
+                      </span>
+                      {attachment.label?.trim() ? (
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          {attachment.label}
+                        </span>
+                      ) : null}
+                      <span className="truncate text-slate-500" title={attachment.file.name}>
+                        {attachment.file.name}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-400">No hay documentos adjuntos todavía.</p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Otros documentos */}
@@ -888,6 +934,17 @@ export default function NuevoCliente() {
       </div>
 
       {/* Modales */}
+      <UploadModal
+        open={showPolicyDocsModal}
+        title="Documentos de la póliza"
+        initialFiles={policyAttachments}
+        categories={DOCUMENT_TYPE_OPTIONS}
+        onClose={() => setShowPolicyDocsModal(false)}
+        onConfirm={(files) => {
+          setPolicyAttachments(files);
+          setShowPolicyDocsModal(false);
+        }}
+      />
       <UploadModal
         open={showDocModal}
         title="Subir documento (RUT / identificación)"
