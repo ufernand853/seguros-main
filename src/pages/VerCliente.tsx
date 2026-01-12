@@ -13,9 +13,12 @@ import {
   apiCreatePolicy,
   apiListInsurers,
   apiListPolicies,
+  apiListPolicyDocuments,
+  apiUploadPolicyDocuments,
   apiUpdateClient,
   apiUpdatePolicy,
   type InsurerListItem,
+  type PolicyDocumentItem,
   type PolicyItem,
   type PolicySummary,
 } from "../services/api";
@@ -124,7 +127,7 @@ export default function VerCliente() {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySuccess, setPolicySuccess] = useState<string | null>(null);
   const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
-  const [policyAttachments, setPolicyAttachments] = useState<Record<string, DocumentAttachment[]>>({});
+  const [policyDocuments, setPolicyDocuments] = useState<Record<string, PolicyDocumentItem[]>>({});
   const [newPolicyAttachments, setNewPolicyAttachments] = useState<DocumentAttachment[]>([]);
 
   const policyCategoryLabels = useMemo(
@@ -138,8 +141,8 @@ export default function VerCliente() {
   const activePolicyAttachments = useMemo(() => {
     if (!activePolicyId) return [];
     if (activePolicyId === DRAFT_POLICY_ID) return newPolicyAttachments;
-    return policyAttachments[activePolicyId] ?? [];
-  }, [activePolicyId, newPolicyAttachments, policyAttachments]);
+    return [];
+  }, [activePolicyId, newPolicyAttachments]);
   const [isPolicySaving, setPolicySaving] = useState(false);
   const [policyForm, setPolicyForm] = useState({
     insurerId: "",
@@ -256,6 +259,7 @@ export default function VerCliente() {
           insurerId: prev.insurerId || insurersResponse.items?.[0]?.id || "",
         }));
         setIsEditing(true);
+        void loadPolicyDocuments(data.policies ?? []);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el cliente"))
       .finally(() => setIsLoading(false));
@@ -383,6 +387,48 @@ export default function VerCliente() {
   const insurerNameById = (insurerId?: string | null) =>
     insurers.find((insurer) => insurer.id === insurerId)?.name ?? "Sin aseguradora";
 
+  const loadPolicyDocuments = async (policyList: PolicySummary[]) => {
+    if (!token || !policyList.length) return;
+    const results = await Promise.allSettled(
+      policyList.map((policy) => apiListPolicyDocuments(policy.id, token)),
+    );
+    const nextDocuments: Record<string, PolicyDocumentItem[]> = {};
+    results.forEach((result, index) => {
+      const policyId = policyList[index]?.id;
+      if (!policyId) return;
+      if (result.status === "fulfilled") {
+        nextDocuments[policyId] = result.value.items ?? [];
+      }
+    });
+    if (Object.keys(nextDocuments).length) {
+      setPolicyDocuments((prev) => ({ ...prev, ...nextDocuments }));
+    }
+  };
+
+  const handleConfirmPolicyAttachments = async (policyId: string, files: DocumentAttachment[]) => {
+    if (!token) {
+      setPolicyError("Debes iniciar sesión para adjuntar documentos.");
+      return;
+    }
+
+    if (!files.length) {
+      setActivePolicyId(null);
+      return;
+    }
+
+    try {
+      const response = await apiUploadPolicyDocuments(policyId, files, token);
+      setPolicyDocuments((prev) => ({
+        ...prev,
+        [policyId]: [...(prev[policyId] ?? []), ...(response.items ?? [])],
+      }));
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : "No se pudieron adjuntar los documentos.");
+    } finally {
+      setActivePolicyId(null);
+    }
+  };
+
   const handleAssociatePolicy = async () => {
     if (!id || !token) return;
     setPolicyError(null);
@@ -428,8 +474,9 @@ export default function VerCliente() {
         apiGetClientSummary(id, token),
         apiListPolicies(token),
       ]);
-      setPolicies(clientData.policies ?? []);
-      setAvailablePolicies(policiesResponse.items ?? []);
+        setPolicies(clientData.policies ?? []);
+        setAvailablePolicies(policiesResponse.items ?? []);
+        await loadPolicyDocuments(clientData.policies ?? []);
 
       const policyLabel = policy.type ?? policy.id;
       setPolicySuccess(`Póliza ${policyLabel} asociada al cliente como ${ROLE_OPTIONS.find((role) => role.value === selectedRole)?.label ?? "asegurado"}.`);
@@ -472,10 +519,20 @@ export default function VerCliente() {
       ]);
       setPolicies(clientData.policies ?? []);
       setAvailablePolicies(policiesResponse.items ?? []);
+      await loadPolicyDocuments(clientData.policies ?? []);
 
       if (newPolicyAttachments.length) {
-        setPolicyAttachments((prev) => ({ ...prev, [createdPolicy.id]: newPolicyAttachments }));
-        setNewPolicyAttachments([]);
+        try {
+          const response = await apiUploadPolicyDocuments(createdPolicy.id, newPolicyAttachments, token);
+          setPolicyDocuments((prev) => ({ ...prev, [createdPolicy.id]: response.items ?? [] }));
+          setNewPolicyAttachments([]);
+        } catch (uploadError) {
+          setPolicyError(
+            uploadError instanceof Error
+              ? uploadError.message
+              : "La póliza se creó, pero no se pudieron adjuntar los documentos.",
+          );
+        }
       }
 
       setPolicyForm((prev) => ({ ...prev, type: "", policyNumber: "", premium: "", nextRenewal: "" }));
@@ -955,7 +1012,7 @@ export default function VerCliente() {
               ) : (
                 <ul className="mt-3 space-y-2">
                   {policies.map((policy) => {
-                    const policyDocs = policyAttachments[policy.id] ?? [];
+                    const policyDocs = policyDocuments[policy.id] ?? [];
                     return (
                       <li key={policy.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -979,18 +1036,18 @@ export default function VerCliente() {
                         <div className="mt-2 text-xs text-slate-500">
                           {policyDocs.length ? (
                             <ul className="space-y-1">
-                              {policyDocs.map((attachment, index) => (
-                                <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                              {policyDocs.map((attachment) => (
+                                <li key={attachment.id} className="flex flex-wrap gap-2">
                                   <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                    {policyCategoryLabels[attachment.category] ?? attachment.category}
+                                    {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "Otros"}
                                   </span>
                                   {attachment.label?.trim() ? (
                                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                       {attachment.label}
                                     </span>
                                   ) : null}
-                                  <span className="truncate text-slate-500" title={attachment.file.name}>
-                                    {attachment.file.name}
+                                  <span className="truncate text-slate-500" title={attachment.name}>
+                                    {attachment.name}
                                   </span>
                                 </li>
                               ))}
@@ -1277,12 +1334,13 @@ export default function VerCliente() {
         initialFiles={activePolicyAttachments}
         onClose={() => setActivePolicyId(null)}
         onConfirm={(files) => {
+          if (!activePolicyId) return;
           if (activePolicyId === DRAFT_POLICY_ID) {
             setNewPolicyAttachments(files);
-          } else if (activePolicyId) {
-            setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
+            setActivePolicyId(null);
+            return;
           }
-          setActivePolicyId(null);
+          void handleConfirmPolicyAttachments(activePolicyId, files);
         }}
       />
       <ViewFilesModal
