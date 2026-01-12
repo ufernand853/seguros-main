@@ -777,6 +777,7 @@ export type ClaimItem = {
   notes?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
+  deleted_at?: string | null;
   created_at?: string | null;
 };
 
@@ -814,6 +815,19 @@ export async function apiDownloadClaimDocument(
   accessToken: string,
 ): Promise<Blob> {
   return requestBlob(`/claims/${encodePathSegment(claimId)}/documents/${encodePathSegment(documentId)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiDeleteClaimDocument(
+  claimId: string,
+  documentId: string,
+  accessToken: string,
+): Promise<{ ok: boolean }> {
+  return request(`/claims/${encodePathSegment(claimId)}/documents/${encodePathSegment(documentId)}`, {
+    method: "DELETE",
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -866,6 +880,8 @@ export type CreateClaimPayload = {
   contact_phone?: string | null;
 };
 
+export type UpdateClaimPayload = CreateClaimPayload;
+
 export const apiListClaims = async (accessToken: string): Promise<{ items: ClaimItem[] }> =>
   request("/claims", {
     headers: {
@@ -881,6 +897,30 @@ export async function apiCreateClaim(payload: CreateClaimPayload, accessToken: s
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdateClaim(
+  claimId: string,
+  payload: UpdateClaimPayload,
+  accessToken: string,
+): Promise<{ item: ClaimItem }> {
+  return request(`/claims/${encodePathSegment(claimId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiArchiveClaim(claimId: string, accessToken: string): Promise<{ ok: boolean }> {
+  return request(`/claims/${encodePathSegment(claimId)}/archive`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 
