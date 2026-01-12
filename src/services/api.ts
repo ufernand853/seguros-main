@@ -572,7 +572,7 @@ export async function apiUpdatePolicy(
   payload: CreatePolicyPayload,
   accessToken: string,
 ): Promise<PolicyItem> {
-  return request(`/policies/${policyId}`, {
+  return request(`/policies/${encodePathSegment(policyId)}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
