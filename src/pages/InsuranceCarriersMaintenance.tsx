@@ -587,19 +587,29 @@ export default function InsuranceCarriersMaintenance() {
   };
 
   const handleDeactivatePolicy = async (policy: PolicyItem) => {
-    if (!token) return;
     setPolicyError(null);
     setPolicySuccess(null);
+
+    if (!token) {
+      setPolicyError("Debes iniciar sesión para dar de baja pólizas.");
+      return;
+    }
+
+    const policyLabel = policy.policy_number?.trim() || policy.type?.trim() || policy.id;
+    const confirmed = window.confirm(`¿Seguro que quieres dar de baja la póliza "${policyLabel}"?`);
+    if (!confirmed) return;
+
     setPolicySaving(true);
 
     try {
-      await apiUpdatePolicy(
+      const updatedPolicy = await apiUpdatePolicy(
         policy.id,
         {
           status: "Suspendida",
         },
         token,
       );
+      setPolicies((prev) => prev.map((item) => (item.id === updatedPolicy.id ? updatedPolicy : item)));
       setPolicySuccess("Póliza marcada como suspendida.");
       await reloadPolicies();
     } catch (err) {
