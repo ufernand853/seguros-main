@@ -1,36 +1,47 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
+import UploadModal from "../components/UploadModal";
 import type { DocumentAttachment } from "../components/UploadModal";
 import { useAuth } from "../auth/AuthProvider";
 import {
+  apiArchiveClaim,
   apiCreateClaim,
+  apiDeleteClaimDocument,
   apiDownloadClaimDocument,
   apiListClaimDocuments,
   apiListClaims,
   apiListClients,
-  apiListPolicyDocuments,
+  apiUpdateClaim,
   apiUploadClaimDocuments,
-  apiUploadPolicyDocuments,
   type CreateClaimPayload,
   type ClaimDocumentItem,
   type ClaimItem,
   type ClientListItem,
-  type PolicyDocumentItem,
   type PolicySummary,
 } from "../services/api";
 
 type ClaimRecord = {
   id: string;
+  clienteId?: string | null;
   poliza?: string | null;
   policyType?: string | null;
   insurerName?: string | null;
   tipo: string;
   fecha: string;
+  hora?: string | null;
   estado: string;
   resumen: string;
   prioridad?: string | null;
   canal?: string | null;
   asegurado?: string | null;
+  documento?: string | null;
+  contacto?: string | null;
+  telefono?: string | null;
+  responsableInterno?: string | null;
+  observaciones?: string | null;
+  notificarCliente?: boolean;
+  notificarProductor?: boolean;
+  danosTerceros?: boolean;
+  requiereGrua?: boolean;
   ubicacion?: string | null;
 };
 
@@ -81,9 +92,8 @@ export default function ClaimRegistration() {
     presupuesto: false,
   });
   const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
-  const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
+  const [editingClaimId, setEditingClaimId] = useState<string | null>(null);
   const [claimDocuments, setClaimDocuments] = useState<Record<string, ClaimDocumentItem[]>>({});
-  const [policyDocuments, setPolicyDocuments] = useState<Record<string, PolicyDocumentItem[]>>({});
 
   const [isLoadingData, setLoadingData] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -93,10 +103,6 @@ export default function ClaimRegistration() {
   const selectedClient = useMemo(() => clients.find((client) => client.id === claimForm.clienteId), [clients, claimForm.clienteId]);
   const policyOptions = selectedClient?.policies ?? [];
   const selectedPolicy = useMemo(() => policyOptions.find((policy) => policy.id === claimForm.poliza), [policyOptions, claimForm.poliza]);
-  const selectedPolicyDocuments = useMemo(() => {
-    if (!claimForm.poliza) return [];
-    return policyDocuments[claimForm.poliza] ?? [];
-  }, [claimForm.poliza, policyDocuments]);
   const formatPolicyLabel = (policy?: PolicySummary) => {
     const policyNumber = policy?.policy_number ?? policy?.id;
     return [
@@ -120,15 +126,6 @@ export default function ClaimRegistration() {
     return { total, ready };
   }, [documentChecklist]);
 
-  const policyDocumentCategories = DEFAULT_DOCUMENT_CATEGORIES;
-  const policyCategoryLabels = useMemo(
-    () =>
-      policyDocumentCategories.reduce<Record<string, string>>((acc, option) => {
-        acc[option.value] = option.label;
-        return acc;
-      }, {}),
-    [policyDocumentCategories]
-  );
   const claimCategoryLabels = useMemo(
     () =>
       CLAIM_DOCUMENT_CATEGORIES.reduce<Record<string, string>>((acc, option) => {
@@ -164,36 +161,29 @@ export default function ClaimRegistration() {
 
   const mapClaimFromApi = (item: ClaimItem): ClaimRecord => ({
     id: item.id,
+    clienteId: item.client_id ?? null,
     poliza: item.policy_id ?? null,
     policyType: item.policy_type ?? null,
     insurerName: item.insurer_name ?? null,
     tipo: item.type ?? "Siniestro",
     fecha: item.event_date ? item.event_date.slice(0, 10) : "",
+    hora: item.event_time ?? null,
     estado: item.status ?? "Denuncia ingresada",
     resumen: item.description ?? "",
     prioridad: item.priority ?? null,
     canal: item.channel ?? null,
     asegurado: item.client_name ?? null,
+    documento: item.client_document ?? null,
+    contacto: item.contact_email ?? null,
+    telefono: item.contact_phone ?? null,
+    responsableInterno: item.internal_owner ?? null,
+    observaciones: item.notes ?? null,
+    notificarCliente: item.notify_client ?? null,
+    notificarProductor: item.notify_broker ?? null,
+    danosTerceros: item.third_party_damage ?? null,
+    requiereGrua: item.tow_needed ?? null,
     ubicacion: item.location ?? null,
   });
-
-  const loadPolicyDocuments = async (policyList: PolicySummary[]) => {
-    if (!token || policyList.length === 0) return;
-    const results = await Promise.allSettled(
-      policyList.map((policy) => apiListPolicyDocuments(policy.id, token)),
-    );
-    const nextDocuments: Record<string, PolicyDocumentItem[]> = {};
-    results.forEach((result, index) => {
-      const policyId = policyList[index]?.id;
-      if (!policyId) return;
-      if (result.status === "fulfilled") {
-        nextDocuments[policyId] = result.value.items ?? [];
-      }
-    });
-    if (Object.keys(nextDocuments).length) {
-      setPolicyDocuments((prev) => ({ ...prev, ...nextDocuments }));
-    }
-  };
 
   const loadClaimDocuments = async (claimList: ClaimRecord[]) => {
     if (!token || claimList.length === 0) return;
@@ -229,6 +219,79 @@ export default function ClaimRegistration() {
     }
   };
 
+  const handleDeleteClaimDocument = async (claimId: string, attachment: ClaimDocumentItem) => {
+    if (!token) {
+      setError("Debes iniciar sesión para eliminar documentos.");
+      return;
+    }
+    const confirmed = window.confirm(`¿Seguro que quieres eliminar "${attachment.name ?? "este documento"}"?`);
+    if (!confirmed) return;
+
+    try {
+      await apiDeleteClaimDocument(claimId, attachment.id, token);
+      setClaimDocuments((prev) => ({
+        ...prev,
+        [claimId]: (prev[claimId] ?? []).filter((doc) => doc.id !== attachment.id),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar el documento.");
+    }
+  };
+
+  const startEditClaim = (claim: ClaimRecord) => {
+    setEditingClaimId(claim.id);
+    setSuccess(null);
+    setError(null);
+    setClaimForm((current) => ({
+      ...current,
+      clienteId: claim.clienteId ?? current.clienteId,
+      asegurado: claim.asegurado ?? "",
+      documento: claim.documento ?? "",
+      contacto: claim.contacto ?? "",
+      telefono: claim.telefono ?? "",
+      poliza: claim.poliza ?? "",
+      tipo: claim.tipo ?? EVENT_TYPES[0],
+      fecha: claim.fecha ?? "",
+      hora: claim.hora ?? "",
+      ubicacion: claim.ubicacion ?? "",
+      descripcion: claim.resumen ?? "",
+      danosTerceros: claim.danosTerceros ?? false,
+      requiereGrua: claim.requiereGrua ?? false,
+      prioridad: claim.prioridad ?? PRIORITIES[0],
+      canal: claim.canal ?? NOTIFICATION_CHANNELS[0],
+      responsableInterno: claim.responsableInterno ?? "Equipo Siniestros",
+      observaciones: claim.observaciones ?? "",
+      notificarCliente: claim.notificarCliente ?? true,
+      notificarProductor: claim.notificarProductor ?? true,
+    }));
+  };
+
+  const clearEditing = () => setEditingClaimId(null);
+
+  const handleArchiveClaim = async (claim: ClaimRecord) => {
+    if (!token) {
+      setError("Debes iniciar sesión para eliminar siniestros.");
+      return;
+    }
+    const confirmed = window.confirm(`¿Seguro que quieres eliminar el siniestro ${claim.id}?`);
+    if (!confirmed) return;
+
+    try {
+      await apiArchiveClaim(claim.id, token);
+      setClaims((prev) => prev.filter((item) => item.id !== claim.id));
+      setClaimDocuments((prev) => {
+        const next = { ...prev };
+        delete next[claim.id];
+        return next;
+      });
+      if (editingClaimId === claim.id) {
+        clearEditing();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar el siniestro.");
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     setLoadingData(true);
@@ -243,12 +306,6 @@ export default function ClaimRegistration() {
 
         setClients(clientsFromApi);
         syncFormWithClient(clientsFromApi);
-        const policiesFromClients = clientsFromApi.flatMap((client) => client.policies ?? []);
-        const uniquePolicies = Array.from(
-          new Map(policiesFromClients.map((policy) => [policy.id, policy])).values(),
-        );
-        void loadPolicyDocuments(uniquePolicies);
-
         const mappedClaims = (claimsResponse.items ?? []).map((item: ClaimItem) => mapClaimFromApi(item));
         setClaims(mappedClaims);
         void loadClaimDocuments(mappedClaims);
@@ -262,8 +319,6 @@ export default function ClaimRegistration() {
   };
 
   const closeClaimModal = () => setActiveClaimId(null);
-  const closePolicyModal = () => setActivePolicyId(null);
-
   const handleConfirmClaimAttachments = async (files: DocumentAttachment[]) => {
     if (!activeClaimId) return;
     if (!token) {
@@ -291,33 +346,6 @@ export default function ClaimRegistration() {
     }
   };
 
-  const handleConfirmPolicyAttachments = async (files: DocumentAttachment[]) => {
-    if (!activePolicyId) return;
-    if (!token) {
-      setActivePolicyId(null);
-      throw new Error("Debes iniciar sesión para adjuntar documentos.");
-    }
-
-    const policyId = activePolicyId;
-    if (files.length === 0) {
-      setActivePolicyId(null);
-      return;
-    }
-
-    try {
-      const response = await apiUploadPolicyDocuments(policyId, files, token);
-      setPolicyDocuments((prev) => ({
-        ...prev,
-        [policyId]: [...(prev[policyId] ?? []), ...(response.items ?? [])],
-      }));
-      return {
-        successMessage: "Documentos agregados a la póliza. Se guardaron correctamente.",
-      };
-    } finally {
-      setActivePolicyId(null);
-    }
-  };
-
   const handleClientChange = (clientId: string) => {
     const client = clients.find((c) => c.id === clientId);
     setClaimForm((current) => ({
@@ -337,7 +365,7 @@ export default function ClaimRegistration() {
     setSuccess(null);
 
     if (!token) {
-      setError("Debes iniciar sesión para registrar el siniestro.");
+      setError("Debes iniciar sesión para guardar el siniestro.");
       return;
     }
 
@@ -345,8 +373,6 @@ export default function ClaimRegistration() {
       setError("Completa cliente, póliza, fecha, ubicación y descripción del evento para registrar el siniestro.");
       return;
     }
-
-    setSubmitting(true);
 
     try {
       const payload: CreateClaimPayload = {
@@ -369,16 +395,24 @@ export default function ClaimRegistration() {
         contact_phone: claimForm.telefono || null,
       };
 
-      const response = await apiCreateClaim(payload, token);
-      const newClaim = mapClaimFromApi(response.item);
+      setSubmitting(true);
+      if (editingClaimId) {
+        const response = await apiUpdateClaim(editingClaimId, payload, token);
+        const updatedClaim = mapClaimFromApi(response.item);
+        setClaims((current) => current.map((claim) => (claim.id === updatedClaim.id ? updatedClaim : claim)));
+        setSuccess(`Siniestro ${updatedClaim.id} actualizado correctamente.`);
+        clearEditing();
+      } else {
+        const response = await apiCreateClaim(payload, token);
+        const newClaim = mapClaimFromApi(response.item);
+        setClaims((current) => [newClaim, ...current.filter((claim) => claim.id !== newClaim.id)]);
 
-      setClaims((current) => [newClaim, ...current.filter((claim) => claim.id !== newClaim.id)]);
-
-      const policyLabel =
-        selectedPolicy?.policy_number ?? selectedPolicy?.type ?? selectedPolicy?.id ?? claimForm.poliza;
-      setSuccess(
-        `Denuncia registrada en base para la póliza ${policyLabel}. Se notifica al asegurado por ${claimForm.canal} y queda en seguimiento interno.`,
-      );
+        const policyLabel =
+          selectedPolicy?.policy_number ?? selectedPolicy?.type ?? selectedPolicy?.id ?? claimForm.poliza;
+        setSuccess(
+          `Denuncia registrada en base para la póliza ${policyLabel}. Se notifica al asegurado por ${claimForm.canal} y queda en seguimiento interno.`,
+        );
+      }
 
       setClaimForm((current) => ({
         ...current,
@@ -389,7 +423,7 @@ export default function ClaimRegistration() {
         observaciones: "",
       }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo registrar el siniestro en la base de datos");
+      setError(err instanceof Error ? err.message : "No se pudo guardar el siniestro en la base de datos");
     } finally {
       setSubmitting(false);
     }
@@ -560,51 +594,6 @@ export default function ClaimRegistration() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Documentos de la póliza</h3>
-                  <p className="text-xs text-slate-500">
-                    Adjunta respaldos para la póliza seleccionada (PDF, imágenes u otros).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => claimForm.poliza && setActivePolicyId(claimForm.poliza)}
-                  disabled={!claimForm.poliza}
-                  className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-                >
-                  {selectedPolicyDocuments.length ? "Gestionar adjuntos" : "Cargar documentos"}
-                </button>
-              </div>
-              <div className="mt-3">
-                {selectedPolicyDocuments.length ? (
-                  <ul className="space-y-2 text-xs text-slate-600">
-                    {selectedPolicyDocuments.map((attachment) => (
-                      <li
-                        key={attachment.id}
-                        className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                      >
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                          {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "otros"}
-                        </span>
-                        {attachment.label?.trim() ? (
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                            {attachment.label}
-                          </span>
-                        ) : null}
-                        <span className="truncate text-slate-500" title={attachment.name}>
-                          {attachment.name}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-slate-400">No hay documentos adjuntos para esta póliza.</p>
-                )}
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="fecha">
@@ -764,17 +753,28 @@ export default function ClaimRegistration() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <div className="text-sm text-slate-500">
                 Al registrar se crea la tarea interna y se guarda la constancia para el cliente.
               </div>
-              <button
-                type="submit"
-                disabled={isSubmitting || isLoadingData || clients.length === 0}
-                className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-60"
-              >
-                {isSubmitting ? "Registrando…" : "Registrar siniestro"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isLoadingData || clients.length === 0}
+                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {isSubmitting ? "Guardando…" : editingClaimId ? "Guardar cambios" : "Registrar siniestro"}
+                </button>
+                {editingClaimId ? (
+                  <button
+                    type="button"
+                    onClick={clearEditing}
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Cancelar edición
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
@@ -947,6 +947,22 @@ export default function ClaimRegistration() {
                       <span>Canal: {claim.canal ?? "—"}</span>
                       <span>Prioridad: {claim.prioridad ?? "—"}</span>
                     </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                      <button
+                        type="button"
+                        onClick={() => startEditClaim(claim)}
+                        className="inline-flex items-center gap-1 rounded-full border border-indigo-200 px-2 py-0.5 font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveClaim(claim)}
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-200 px-2 py-0.5 font-semibold text-rose-600 transition hover:bg-rose-50"
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    </div>
                     <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                       <div className="flex items-center justify-between text-xs text-slate-500">
                         <span className="font-semibold text-slate-700">Documentos del siniestro</span>
@@ -975,13 +991,26 @@ export default function ClaimRegistration() {
                                 <span className="truncate text-slate-500" title={attachment.name}>
                                   {attachment.name}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleViewClaimDocument(claim.id, attachment)}
-                                  className="ml-auto inline-flex items-center justify-center rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100"
-                                >
-                                  Ver documento
-                                </button>
+                                <div className="ml-auto inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewClaimDocument(claim.id, attachment)}
+                                    className="inline-flex items-center justify-center rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100"
+                                    title="Ver documento"
+                                    aria-label="Ver documento"
+                                  >
+                                    🔍
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteClaimDocument(claim.id, attachment)}
+                                    className="inline-flex items-center justify-center rounded-full border border-rose-200 px-2 py-0.5 text-[10px] font-semibold text-rose-600 transition hover:bg-rose-50"
+                                    title="Eliminar documento"
+                                    aria-label="Eliminar documento"
+                                  >
+                                    ✖
+                                  </button>
+                                </div>
                               </li>
                             ))}
                           </ul>
@@ -1005,14 +1034,6 @@ export default function ClaimRegistration() {
         initialFiles={[]}
         onClose={closeClaimModal}
         onConfirm={handleConfirmClaimAttachments}
-      />
-      <UploadModal
-        open={Boolean(activePolicyId)}
-        title="Adjuntar documentos a póliza"
-        categories={policyDocumentCategories}
-        initialFiles={[]}
-        onClose={closePolicyModal}
-        onConfirm={handleConfirmPolicyAttachments}
       />
     </div>
   );
