@@ -9,11 +9,14 @@ import {
   apiCreatePolicy,
   apiDeleteInsurer,
   apiListInsurers,
+  apiListPolicyDocuments,
   apiListPolicies,
+  apiUploadPolicyDocuments,
   apiUpdateInsurer,
   apiUpdatePolicy,
   type CreateInsurerPayload,
   type InsurerListItem,
+  type PolicyDocumentItem,
   type PolicyItem,
 } from "../services/api";
 
@@ -175,9 +178,27 @@ export default function InsuranceCarriersMaintenance() {
   const [editingPolicy, setEditingPolicy] = useState<PolicyItem | null>(null);
   const [isPolicySaving, setPolicySaving] = useState(false);
   const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
-  const [policyAttachments, setPolicyAttachments] = useState<Record<string, DocumentAttachment[]>>({});
+  const [policyDocuments, setPolicyDocuments] = useState<Record<string, PolicyDocumentItem[]>>({});
   const [draftPolicyAttachments, setDraftPolicyAttachments] = useState<DocumentAttachment[]>([]);
   const isAdmin = user?.role === "admin";
+
+  const loadPolicyDocuments = async (policyList: PolicyItem[]) => {
+    if (!token || policyList.length === 0) return;
+    const results = await Promise.allSettled(
+      policyList.map((policy) => apiListPolicyDocuments(policy.id, token)),
+    );
+    const nextDocuments: Record<string, PolicyDocumentItem[]> = {};
+    results.forEach((result, index) => {
+      const policyId = policyList[index]?.id;
+      if (!policyId) return;
+      if (result.status === "fulfilled") {
+        nextDocuments[policyId] = result.value.items ?? [];
+      }
+    });
+    if (Object.keys(nextDocuments).length) {
+      setPolicyDocuments((prev) => ({ ...prev, ...nextDocuments }));
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -200,7 +221,9 @@ export default function InsuranceCarriersMaintenance() {
         }
 
         if (policiesResult.status === "fulfilled") {
-          setPolicies(policiesResult.value.items ?? []);
+          const items = policiesResult.value.items ?? [];
+          setPolicies(items);
+          void loadPolicyDocuments(items);
         } else {
           setPolicyError(
             policiesResult.reason instanceof Error ? policiesResult.reason.message : "No se pudieron cargar las pólizas",
@@ -290,15 +313,19 @@ export default function InsuranceCarriersMaintenance() {
       );
     });
   }, [associatedPolicies, policySearch]);
+  const formPolicyDocuments = useMemo(() => {
+    if (!editingPolicy) return [];
+    return policyDocuments[editingPolicy.id] ?? [];
+  }, [editingPolicy, policyDocuments]);
   const formPolicyAttachments = useMemo(() => {
-    if (editingPolicy) return policyAttachments[editingPolicy.id] ?? [];
+    if (editingPolicy) return [];
     return draftPolicyAttachments;
-  }, [draftPolicyAttachments, editingPolicy, policyAttachments]);
+  }, [draftPolicyAttachments, editingPolicy]);
   const activePolicyAttachments = useMemo(() => {
     if (!activePolicyId) return [];
     if (activePolicyId === DRAFT_POLICY_ID) return draftPolicyAttachments;
-    return policyAttachments[activePolicyId] ?? [];
-  }, [activePolicyId, draftPolicyAttachments, policyAttachments]);
+    return [];
+  }, [activePolicyId, draftPolicyAttachments]);
 
   useEffect(() => {
     setPolicyForm({
@@ -436,7 +463,9 @@ export default function InsuranceCarriersMaintenance() {
     setPolicyError(null);
     try {
       const data = await apiListPolicies(token);
-      setPolicies(data.items ?? []);
+      const items = data.items ?? [];
+      setPolicies(items);
+      void loadPolicyDocuments(items);
     } catch (err) {
       setPolicyError(err instanceof Error ? err.message : "No se pudieron cargar las pólizas");
     } finally {
@@ -495,8 +524,17 @@ export default function InsuranceCarriersMaintenance() {
       } else {
         const createdPolicy = await apiCreatePolicy(payload, token);
         if (draftPolicyAttachments.length) {
-          setPolicyAttachments((prev) => ({ ...prev, [createdPolicy.id]: draftPolicyAttachments }));
-          setDraftPolicyAttachments([]);
+          try {
+            const response = await apiUploadPolicyDocuments(createdPolicy.id, draftPolicyAttachments, token);
+            setPolicyDocuments((prev) => ({ ...prev, [createdPolicy.id]: response.items ?? [] }));
+            setDraftPolicyAttachments([]);
+          } catch (err) {
+            setPolicyError(
+              err instanceof Error
+                ? `La póliza se creó, pero no se pudieron adjuntar documentos: ${err.message}`
+                : "La póliza se creó, pero no se pudieron adjuntar documentos.",
+            );
+          }
         }
         setPolicySuccess("Póliza creada y asociada a la aseguradora.");
       }
@@ -1417,7 +1455,7 @@ export default function InsuranceCarriersMaintenance() {
                 ) : (
                   <div className="mt-3 space-y-2">
                     {filteredPolicies.map((policy) => {
-                      const policyDocs = policyAttachments[policy.id] ?? [];
+                      const policyDocs = policyDocuments[policy.id] ?? [];
                       return (
                         <div
                           key={policy.id}
@@ -1467,18 +1505,18 @@ export default function InsuranceCarriersMaintenance() {
                           <div className="mt-2 text-xs text-slate-500">
                             {policyDocs.length ? (
                               <ul className="space-y-1">
-                                {policyDocs.map((attachment, index) => (
-                                  <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
+                                {policyDocs.map((attachment) => (
+                                  <li key={attachment.id} className="flex flex-wrap gap-2">
                                     <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                      {policyCategoryLabels[attachment.category] ?? attachment.category}
+                                      {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "otros"}
                                     </span>
                                     {attachment.label?.trim() ? (
                                       <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                         {attachment.label}
                                       </span>
                                     ) : null}
-                                    <span className="truncate text-slate-500" title={attachment.file.name}>
-                                      {attachment.file.name}
+                                    <span className="truncate text-slate-500" title={attachment.name}>
+                                      {attachment.name}
                                     </span>
                                   </li>
                                 ))}
@@ -1563,11 +1601,39 @@ export default function InsuranceCarriersMaintenance() {
                       onClick={() => setActivePolicyId(editingPolicy ? editingPolicy.id : DRAFT_POLICY_ID)}
                       className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                     >
-                      {formPolicyAttachments.length ? "Gestionar adjuntos" : "Adjuntar documentos"}
+                      {editingPolicy
+                        ? formPolicyDocuments.length
+                          ? "Gestionar adjuntos"
+                          : "Adjuntar documentos"
+                        : formPolicyAttachments.length
+                          ? "Gestionar adjuntos"
+                          : "Adjuntar documentos"}
                     </button>
                   </div>
                   <div className="mt-2">
-                    {formPolicyAttachments.length ? (
+                    {editingPolicy ? (
+                      formPolicyDocuments.length ? (
+                        <ul className="space-y-1">
+                          {formPolicyDocuments.map((attachment) => (
+                            <li key={attachment.id} className="flex flex-wrap gap-2">
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                {policyCategoryLabels[attachment.category ?? "otros"] ?? attachment.category ?? "otros"}
+                              </span>
+                              {attachment.label?.trim() ? (
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                  {attachment.label}
+                                </span>
+                              ) : null}
+                              <span className="truncate text-slate-500" title={attachment.name}>
+                                {attachment.name}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-slate-400">No hay documentos adjuntos todavía.</p>
+                      )
+                    ) : formPolicyAttachments.length ? (
                       <ul className="space-y-1">
                         {formPolicyAttachments.map((attachment, index) => (
                           <li key={`${attachment.file.name}-${index}`} className="flex flex-wrap gap-2">
@@ -1630,16 +1696,35 @@ export default function InsuranceCarriersMaintenance() {
         categories={DEFAULT_DOCUMENT_CATEGORIES}
         initialFiles={activePolicyAttachments}
         onClose={() => setActivePolicyId(null)}
-        onConfirm={(files) => {
-          let successMessage = "Documentos agregados a la póliza. Se guardan en esta sesión.";
+        onConfirm={async (files) => {
           if (activePolicyId === DRAFT_POLICY_ID) {
             setDraftPolicyAttachments(files);
-            successMessage = "Documentos agregados al borrador. Se guardarán al crear la póliza.";
-          } else if (activePolicyId) {
-            setPolicyAttachments((prev) => ({ ...prev, [activePolicyId]: files }));
+            setActivePolicyId(null);
+            return { successMessage: "Documentos agregados al borrador. Se guardarán al crear la póliza." };
           }
-          setActivePolicyId(null);
-          return { successMessage };
+
+          if (!activePolicyId) return;
+          if (!token) {
+            const message = "Debes iniciar sesión para adjuntar documentos.";
+            setActivePolicyId(null);
+            throw new Error(message);
+          }
+
+          if (files.length === 0) {
+            setActivePolicyId(null);
+            return;
+          }
+
+          try {
+            const response = await apiUploadPolicyDocuments(activePolicyId, files, token);
+            setPolicyDocuments((prev) => ({
+              ...prev,
+              [activePolicyId]: [...(prev[activePolicyId] ?? []), ...(response.items ?? [])],
+            }));
+            return { successMessage: "Documentos agregados a la póliza. Se guardaron correctamente." };
+          } finally {
+            setActivePolicyId(null);
+          }
         }}
       />
     </div>
