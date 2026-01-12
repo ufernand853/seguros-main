@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import UploadModal, { DEFAULT_DOCUMENT_CATEGORIES } from "../components/UploadModal";
+import type { DocumentAttachment } from "../components/UploadModal";
 import { useAuth } from "../auth/AuthProvider";
 import {
   apiCreateClaim,
@@ -77,6 +79,8 @@ export default function ClaimRegistration() {
     informeMedico: false,
     presupuesto: false,
   });
+  const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
+  const [policyAttachments, setPolicyAttachments] = useState<Record<string, DocumentAttachment[]>>({});
 
   const [isLoadingData, setLoadingData] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -89,6 +93,10 @@ export default function ClaimRegistration() {
   const selectedClient = useMemo(() => clients.find((client) => client.id === claimForm.clienteId), [clients, claimForm.clienteId]);
   const policyOptions = selectedClient?.policies ?? [];
   const selectedPolicy = useMemo(() => policyOptions.find((policy) => policy.id === claimForm.poliza), [policyOptions, claimForm.poliza]);
+  const selectedPolicyAttachments = useMemo(() => {
+    if (!claimForm.poliza) return [];
+    return policyAttachments[claimForm.poliza] ?? [];
+  }, [claimForm.poliza, policyAttachments]);
   const formatPolicyLabel = (policy?: PolicySummary) =>
     [
       policy?.type ?? "Póliza",
@@ -110,6 +118,16 @@ export default function ClaimRegistration() {
     const ready = Object.values(documentChecklist).filter(Boolean).length;
     return { total, ready };
   }, [documentChecklist]);
+
+  const policyDocumentCategories = DEFAULT_DOCUMENT_CATEGORIES;
+  const policyCategoryLabels = useMemo(
+    () =>
+      policyDocumentCategories.reduce<Record<string, string>>((acc, option) => {
+        acc[option.value] = option.label;
+        return acc;
+      }, {}),
+    [policyDocumentCategories]
+  );
 
   const syncFormWithClient = (clientsFromApi: ClientWithPolicies[]) => {
     if (clientsFromApi.length === 0) {
@@ -180,6 +198,18 @@ export default function ClaimRegistration() {
 
   const toggleChecklist = (field: keyof typeof documentChecklist) => {
     setDocumentChecklist((current) => ({ ...current, [field]: !current[field] }));
+  };
+
+  const closePolicyModal = () => setActivePolicyId(null);
+
+  const handleConfirmPolicyAttachments = (files: DocumentAttachment[]) => {
+    if (!activePolicyId) return;
+    const policyId = activePolicyId;
+    setPolicyAttachments((prev) => ({
+      ...prev,
+      [policyId]: files,
+    }));
+    setActivePolicyId(null);
   };
 
   const handleClientChange = (clientId: string) => {
@@ -606,6 +636,51 @@ export default function ClaimRegistration() {
               </div>
             </div>
 
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">Documentos de la póliza</h3>
+                  <p className="text-xs text-slate-500">
+                    Adjunta respaldos para la póliza seleccionada (PDF, imágenes u otros).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => claimForm.poliza && setActivePolicyId(claimForm.poliza)}
+                  disabled={!claimForm.poliza}
+                  className="inline-flex items-center justify-center rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                >
+                  {selectedPolicyAttachments.length ? "Gestionar adjuntos" : "Cargar documentos"}
+                </button>
+              </div>
+              <div className="mt-3">
+                {selectedPolicyAttachments.length ? (
+                  <ul className="space-y-2 text-xs text-slate-600">
+                    {selectedPolicyAttachments.map((attachment, index) => (
+                      <li
+                        key={`${attachment.file.name}-${index}`}
+                        className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          {policyCategoryLabels[attachment.category] ?? attachment.category}
+                        </span>
+                        {attachment.label?.trim() ? (
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            {attachment.label}
+                          </span>
+                        ) : null}
+                        <span className="truncate text-slate-500" title={attachment.file.name}>
+                          {attachment.file.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-400">No hay documentos adjuntos para esta póliza.</p>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="fecha">
@@ -955,6 +1030,15 @@ export default function ClaimRegistration() {
           </div>
         </div>
       </section>
+
+      <UploadModal
+        open={Boolean(activePolicyId)}
+        title="Adjuntar documentos a póliza"
+        categories={policyDocumentCategories}
+        initialFiles={activePolicyId ? policyAttachments[activePolicyId] ?? [] : []}
+        onClose={closePolicyModal}
+        onConfirm={handleConfirmPolicyAttachments}
+      />
     </div>
   );
 }

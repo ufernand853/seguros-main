@@ -184,7 +184,14 @@ export default function NuevoCliente() {
             key={`${attachment.file.name}-${idx}`}
             className="flex items-center justify-between gap-3"
           >
-            <span className="truncate">{attachment.file.name}</span>
+            <div className="min-w-0">
+              <div className="truncate">{attachment.file.name}</div>
+              {attachment.label?.trim() ? (
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                  {attachment.label}
+                </div>
+              ) : null}
+            </div>
             <span className="text-xs rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
               {getCategoryLabel(attachment.category)}
             </span>
