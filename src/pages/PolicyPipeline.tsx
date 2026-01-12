@@ -102,6 +102,9 @@ export default function PolicyPipeline() {
       [caseId]: files,
     }));
     setActiveCaseId(null);
+    return {
+      successMessage: "Documentos agregados al caso. Se guardan en esta sesión.",
+    };
   };
 
   return (

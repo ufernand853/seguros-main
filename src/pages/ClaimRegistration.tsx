@@ -210,6 +210,9 @@ export default function ClaimRegistration() {
       [policyId]: files,
     }));
     setActivePolicyId(null);
+    return {
+      successMessage: "Documentos agregados a la póliza. Se guardan en esta sesión.",
+    };
   };
 
   const handleClientChange = (clientId: string) => {
