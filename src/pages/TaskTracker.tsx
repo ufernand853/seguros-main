@@ -172,6 +172,9 @@ export default function TaskTracker() {
       [taskId]: files,
     }));
     setActiveTaskId(null);
+    return {
+      successMessage: "Documentos agregados a la gestión. Se guardan en esta sesión.",
+    };
   };
 
   return (

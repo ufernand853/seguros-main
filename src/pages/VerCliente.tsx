@@ -1,5 +1,5 @@
 // src/pages/VerCliente.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import UploadModal, {
@@ -11,12 +11,15 @@ import type { ViewFileItem } from "../components/ViewFilesModal";
 import {
   apiGetClientSummary,
   apiCreatePolicy,
+  apiDownloadClientDocument,
   apiListInsurers,
+  apiListClientDocuments,
   apiListPolicies,
   apiListPolicyDocuments,
   apiUploadPolicyDocuments,
   apiUpdateClient,
   apiUpdatePolicy,
+  type ClientDocumentItem,
   type InsurerListItem,
   type PolicyDocumentItem,
   type PolicyItem,
@@ -129,6 +132,7 @@ export default function VerCliente() {
   const [activePolicyId, setActivePolicyId] = useState<string | null>(null);
   const [policyDocuments, setPolicyDocuments] = useState<Record<string, PolicyDocumentItem[]>>({});
   const [newPolicyAttachments, setNewPolicyAttachments] = useState<DocumentAttachment[]>([]);
+  const clientDocUrlsRef = useRef<string[]>([]);
 
   const policyCategoryLabels = useMemo(
     () =>
@@ -156,6 +160,13 @@ export default function VerCliente() {
   // Modales SOLO lectura
   const [showDocModal, setShowDocModal] = useState(false);
   const [showOtherDocsModal, setShowOtherDocsModal] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      clientDocUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      clientDocUrlsRef.current = [];
+    };
+  }, []);
 
   const normalizeApoderado = (item: Partial<ApoderadoItem>): ApoderadoItem => ({
     figura: item.figura ?? FIGURA_APODERADO_OPTIONS[0],
@@ -260,6 +271,9 @@ export default function VerCliente() {
         }));
         setIsEditing(true);
         void loadPolicyDocuments(data.policies ?? []);
+        void loadClientDocuments(id).catch((docErr) =>
+          setError(docErr instanceof Error ? docErr.message : "No se pudieron cargar los documentos del cliente"),
+        );
       })
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el cliente"))
       .finally(() => setIsLoading(false));
@@ -405,10 +419,47 @@ export default function VerCliente() {
     }
   };
 
+  const loadClientDocuments = async (clientId: string) => {
+    if (!token) return;
+    const response = await apiListClientDocuments(clientId, token);
+    const docs = response.items ?? [];
+    const itemsWithUrls = await Promise.all(
+      docs.map(async (doc) => {
+        const blob = await apiDownloadClientDocument(clientId, doc.id, token);
+        const url = URL.createObjectURL(blob);
+        return { doc, url };
+      }),
+    );
+    clientDocUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    clientDocUrlsRef.current = itemsWithUrls.map((item) => item.url);
+
+    const toViewItem = (entry: { doc: ClientDocumentItem; url: string }): ViewFileItem => ({
+      name: entry.doc.name ?? "documento",
+      size: entry.doc.size ?? undefined,
+      type: entry.doc.type ?? undefined,
+      url: entry.url,
+    });
+
+    const docFiles = itemsWithUrls
+      .filter((item) => item.doc.group === "identificacion")
+      .map(toViewItem);
+    const otherDocs = itemsWithUrls
+      .filter((item) => item.doc.group !== "identificacion")
+      .map(toViewItem);
+
+    setForm((prev) => ({
+      ...prev,
+      docFiles,
+      otherDocs,
+    }));
+  };
+
   const handleConfirmPolicyAttachments = async (policyId: string, files: DocumentAttachment[]) => {
     if (!token) {
-      setPolicyError("Debes iniciar sesión para adjuntar documentos.");
-      return;
+      const message = "Debes iniciar sesión para adjuntar documentos.";
+      setPolicyError(message);
+      setActivePolicyId(null);
+      throw new Error(message);
     }
 
     if (!files.length) {
@@ -423,7 +474,10 @@ export default function VerCliente() {
         [policyId]: [...(prev[policyId] ?? []), ...(response.items ?? [])],
       }));
     } catch (err) {
-      setPolicyError(err instanceof Error ? err.message : "No se pudieron adjuntar los documentos.");
+      const message =
+        err instanceof Error ? err.message : "No se pudieron adjuntar los documentos.";
+      setPolicyError(message);
+      throw new Error(message);
     } finally {
       setActivePolicyId(null);
     }
@@ -1338,9 +1392,11 @@ export default function VerCliente() {
           if (activePolicyId === DRAFT_POLICY_ID) {
             setNewPolicyAttachments(files);
             setActivePolicyId(null);
-            return;
+            return {
+              successMessage: "Documentos agregados al borrador. Se guardarán al crear la póliza.",
+            };
           }
-          void handleConfirmPolicyAttachments(activePolicyId, files);
+          return handleConfirmPolicyAttachments(activePolicyId, files);
         }}
       />
       <ViewFilesModal
