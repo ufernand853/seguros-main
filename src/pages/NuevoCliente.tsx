@@ -5,7 +5,15 @@ import UploadModal, {
   type DocumentAttachment,
   type DocumentCategoryOption,
 } from "../components/UploadModal";
-import { apiCreateClient, apiCreatePolicy, apiListInsurers, type InsurerListItem } from "../services/api";
+import {
+  apiCreateClient,
+  apiCreatePolicy,
+  apiListInsurers,
+  apiUploadClientDocuments,
+  apiUploadPolicyDocuments,
+  type ClientDocumentUpload,
+  type InsurerListItem,
+} from "../services/api";
 
 type NuevoClientePayload = {
   nombre: string;
@@ -303,9 +311,22 @@ export default function NuevoCliente() {
         );
       }
 
+      if (form.docFiles.length || form.otherDocs.length) {
+        const clientDocuments: ClientDocumentUpload[] = [
+          ...form.docFiles.map((doc) => ({ ...doc, group: "identificacion" })),
+          ...form.otherDocs.map((doc) => ({ ...doc, group: "otros" })),
+        ];
+        try {
+          await apiUploadClientDocuments(createdId, clientDocuments, token);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "El cliente se creó, pero no se pudieron adjuntar documentos.");
+          return;
+        }
+      }
+
       if (policyForm.insurerId && policyForm.type.trim()) {
         try {
-          await apiCreatePolicy(
+          const createdPolicy = await apiCreatePolicy(
             {
               type: policyForm.type.trim(),
               policy_number: policyForm.policyNumber.trim() || null,
@@ -317,7 +338,20 @@ export default function NuevoCliente() {
             },
             token,
           );
-          setPolicyAttachments([]);
+          if (policyAttachments.length) {
+            try {
+              await apiUploadPolicyDocuments(createdPolicy.id, policyAttachments, token);
+              setPolicyAttachments([]);
+            } catch (err) {
+              setError(
+                err instanceof Error
+                  ? `Cliente y póliza creados, pero no se pudieron adjuntar documentos: ${err.message}`
+                  : "Cliente y póliza creados, pero no se pudieron adjuntar documentos.",
+              );
+              navigate(`/clientes/${encodeURIComponent(createdId)}/editar`);
+              return;
+            }
+          }
         } catch (err) {
           setError(
             err instanceof Error

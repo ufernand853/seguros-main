@@ -61,6 +61,33 @@ async function request(path: string, options: RequestInit) {
   }
 }
 
+async function requestBlob(path: string, options: RequestInit): Promise<Blob> {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, options);
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text;
+      if (text) {
+        try {
+          const data = JSON.parse(text);
+          message = data?.error ?? text;
+        } catch {
+          message = text;
+        }
+      }
+      throw new Error(message || `Error ${res.status}: ${res.statusText || "Error inesperado"}`);
+    }
+    return await res.blob();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        `No se pudo conectar con el API en ${API_BASE}. Verifica que el backend esté en marcha y que la variable VITE_API_URL apunte a la URL correcta (p. ej. http://localhost:4000/api o simplemente /api).`,
+      );
+    }
+    throw error;
+  }
+}
+
 function encodePathSegment(value: string) {
   return encodeURIComponent(value);
 }
@@ -144,6 +171,88 @@ export async function apiCreateClient(payload: CreateClientPayload, accessToken:
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export type ClientDocumentItem = {
+  id: string;
+  client_id: string;
+  name: string;
+  size?: number | null;
+  type?: string | null;
+  category?: string | null;
+  label?: string | null;
+  group?: string | null;
+  created_at?: string | null;
+};
+
+export type ClientDocumentUpload = {
+  file: File;
+  category?: string;
+  label?: string;
+  group?: string;
+};
+
+export async function apiListClientDocuments(
+  clientId: string,
+  accessToken: string,
+): Promise<{ items: ClientDocumentItem[] }> {
+  return request(`/clients/${encodePathSegment(clientId)}/documents`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiUploadClientDocuments(
+  clientId: string,
+  documents: ClientDocumentUpload[],
+  accessToken: string,
+): Promise<{ items: ClientDocumentItem[] }> {
+  const payload = await Promise.all(
+    documents.map(async (doc) => ({
+      name: doc.file.name,
+      size: doc.file.size,
+      type: doc.file.type || "application/octet-stream",
+      category: doc.category ?? "otros",
+      label: doc.label ?? "",
+      group: doc.group ?? null,
+      content_base64: await readFileAsBase64(doc.file),
+    })),
+  );
+
+  return request(`/clients/${encodePathSegment(clientId)}/documents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ documents: payload }),
+  });
+}
+
+export async function apiDownloadClientDocument(
+  clientId: string,
+  documentId: string,
+  accessToken: string,
+): Promise<Blob> {
+  return requestBlob(`/clients/${encodePathSegment(clientId)}/documents/${encodePathSegment(documentId)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiDeleteClientDocument(
+  clientId: string,
+  documentId: string,
+  accessToken: string,
+): Promise<{ ok: boolean }> {
+  return request(`/clients/${encodePathSegment(clientId)}/documents/${encodePathSegment(documentId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 
