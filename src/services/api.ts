@@ -917,7 +917,7 @@ export async function apiUpdateClaim(
 
 export async function apiArchiveClaim(claimId: string, accessToken: string): Promise<{ ok: boolean }> {
   return request(`/claims/${encodePathSegment(claimId)}/archive`, {
-    method: "PATCH",
+    method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },

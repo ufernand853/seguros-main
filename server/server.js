@@ -813,7 +813,7 @@ api.patch("/claims/:id", authenticate, async (req, res) => {
   }
 });
 
-api.patch("/claims/:id/archive", authenticate, async (req, res) => {
+const archiveClaim = async (req, res) => {
   const claimId = req.params.id;
   try {
     const db = getDb();
@@ -836,7 +836,10 @@ api.patch("/claims/:id/archive", authenticate, async (req, res) => {
     console.error("[claims archive]", err);
     res.status(500).json({ error: "No se pudo eliminar el siniestro" });
   }
-});
+};
+
+api.patch("/claims/:id/archive", authenticate, archiveClaim);
+api.post("/claims/:id/archive", authenticate, archiveClaim);
 
 api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
   const claimId = req.params.id;
