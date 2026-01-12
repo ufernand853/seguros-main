@@ -99,6 +99,20 @@ function mapClientDocument(doc) {
   };
 }
 
+function mapClaimDocument(doc) {
+  if (!doc) return null;
+  return {
+    id: String(doc._id),
+    claim_id: doc.claim_id ?? null,
+    name: doc.name ?? "",
+    size: typeof doc.size === "number" ? doc.size : null,
+    type: doc.type ?? "application/octet-stream",
+    category: doc.category ?? "otros",
+    label: doc.label ?? null,
+    created_at: doc.created_at ?? null,
+  };
+}
+
 function mapClientSummary(client) {
   if (!client) return null;
   return {
@@ -712,6 +726,108 @@ api.delete("/claims/:id", authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[claims delete]", err);
     res.status(500).json({ error: "No se pudo eliminar el siniestro" });
+  }
+});
+
+api.get("/claims/:id/documents", authenticate, async (req, res) => {
+  const claimId = req.params.id;
+  try {
+    const db = getDb();
+    const claimIds = buildIdList(claimId);
+    const claim = await db.collection("claims").findOne({ _id: { $in: claimIds } });
+    if (!claim) return res.status(404).json({ error: "Siniestro no encontrado" });
+
+    const rows = await db
+      .collection("claim_documents")
+      .find({ claim_id: { $in: claimIds } })
+      .sort({ created_at: -1 })
+      .toArray();
+    res.json({ items: rows.map(mapClaimDocument) });
+  } catch (err) {
+    console.error("[claims documents list]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los documentos" });
+  }
+});
+
+api.post("/claims/:id/documents", authenticate, async (req, res) => {
+  const claimId = req.params.id;
+  const { documents } = req.body || {};
+  if (!Array.isArray(documents) || documents.length === 0) {
+    return res.status(400).json({ error: "Debes enviar documentos para adjuntar" });
+  }
+
+  try {
+    const db = getDb();
+    const claimIds = buildIdList(claimId);
+    const claim = await db.collection("claims").findOne({ _id: { $in: claimIds } });
+    if (!claim) return res.status(404).json({ error: "Siniestro no encontrado" });
+
+    const now = new Date();
+    const items = documents.map((doc, index) => {
+      const name = typeof doc?.name === "string" ? doc.name.trim() : "";
+      const content = typeof doc?.content_base64 === "string" ? doc.content_base64 : "";
+      if (!name) {
+        throw new Error(`Documento ${index + 1}: nombre inválido`);
+      }
+      if (!content) {
+        throw new Error(`Documento ${index + 1}: contenido vacío`);
+      }
+      const buffer = Buffer.from(content, "base64");
+      return {
+        _id: randomUUID(),
+        claim_id: claim._id,
+        name,
+        size: buffer.length,
+        type: typeof doc?.type === "string" && doc.type ? doc.type : "application/octet-stream",
+        category: typeof doc?.category === "string" && doc.category ? doc.category : "otros",
+        label: typeof doc?.label === "string" && doc.label ? doc.label : null,
+        data: buffer,
+        created_at: now,
+      };
+    });
+
+    await db.collection("claim_documents").insertMany(items);
+    res.status(201).json({ items: items.map(mapClaimDocument) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudieron adjuntar los documentos";
+    console.error("[claims documents create]", err);
+    res.status(400).json({ error: message });
+  }
+});
+
+api.get("/claims/:id/documents/:docId", authenticate, async (req, res) => {
+  const { id: claimId, docId } = req.params;
+  try {
+    const db = getDb();
+    const claimIds = buildIdList(claimId);
+    const doc = await db
+      .collection("claim_documents")
+      .findOne({ _id: docId, claim_id: { $in: claimIds } });
+    if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+
+    const buffer = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data?.buffer ?? doc.data ?? []);
+    res.setHeader("Content-Type", doc.type ?? "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${doc.name ?? "documento"}"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error("[claims documents download]", err);
+    res.status(500).json({ error: "No se pudo descargar el documento" });
+  }
+});
+
+api.delete("/claims/:id/documents/:docId", authenticate, async (req, res) => {
+  const { id: claimId, docId } = req.params;
+  try {
+    const db = getDb();
+    const claimIds = buildIdList(claimId);
+    const result = await db
+      .collection("claim_documents")
+      .deleteOne({ _id: docId, claim_id: { $in: claimIds } });
+    if (!result.deletedCount) return res.status(404).json({ error: "Documento no encontrado" });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[claims documents delete]", err);
+    res.status(500).json({ error: "No se pudo eliminar el documento" });
   }
 });
 
