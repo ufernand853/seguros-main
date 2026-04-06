@@ -11,12 +11,12 @@ export default function EntrySelector() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <a
-            href="/dashboard"
+            href="/seguros/login"
             className="rounded-xl border border-indigo-200 bg-indigo-50 p-6 hover:bg-indigo-100 transition block"
           >
             <h2 className="text-xl font-semibold text-indigo-900 mb-2">Seguros</h2>
             <p className="text-sm text-indigo-800">
-              Inicia en el portal de seguros, como funciona actualmente.
+              Inicia en el portal de seguros.
             </p>
           </a>
 

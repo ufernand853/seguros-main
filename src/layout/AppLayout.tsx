@@ -44,7 +44,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <button
             type="button"
-            onClick={() => { logout(); navigate("/login", { replace: true }); }}
+            onClick={() => { logout(); navigate("/seguros/login", { replace: true }); }}
             className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold"
           >
             Logout

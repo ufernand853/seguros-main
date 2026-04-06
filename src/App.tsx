@@ -30,8 +30,9 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Login queda fuera del layout */}
-      <Route path="/login" element={<Login />} />
+      {/* Selector de portal accesible desde raíz y /login */}
+      <Route path="/login" element={<EntrySelector />} />
+      <Route path="/seguros/login" element={<Login />} />
 
       {/* Páginas con layout */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
