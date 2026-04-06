@@ -21,7 +21,7 @@ export default function EntrySelector() {
           </a>
 
           <a
-            href="/EstablecimientoGanadero"
+            href="https://127.0.0.1:3000/EstablecimientoGanadero"
             className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 hover:bg-emerald-100 transition block"
           >
             <h2 className="text-xl font-semibold text-emerald-900 mb-2">Ganadería</h2>
