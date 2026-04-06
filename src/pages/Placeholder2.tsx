@@ -23,7 +23,7 @@ export default function Placeholder() {
         <div className="flex gap-3 justify-center">
           {/* Botón al Login: siempre visible */}
           <Link
-            to="/login"
+            to="/seguros/login"
             className="px-5 py-3 rounded-lg border border-gray-300 text-gray-800 font-semibold hover:bg-gray-50"
           >
             Ir al Login

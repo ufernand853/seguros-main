@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLayout from "./layout/AppLayout";
 
@@ -17,6 +17,7 @@ import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
 import VerCliente from "./pages/VerCliente";
+import EntrySelector from "./pages/EntrySelector";
 
 
 
@@ -29,8 +30,9 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Login queda fuera del layout */}
-      <Route path="/login" element={<Login />} />
+      {/* Selector de portal accesible desde raíz y /login */}
+      <Route path="/login" element={<EntrySelector />} />
+      <Route path="/seguros/login" element={<Login />} />
 
       {/* Páginas con layout */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
@@ -50,8 +52,8 @@ export default function App() {
       <Route path="/configuracion" element={withLayout(<UserMaintenance />)} />
 
 
-      {/* Redirect raíz */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Selector de portal en la raíz */}
+      <Route path="/" element={<EntrySelector />} />
 
       {/* Fallback */}
       <Route path="*" element={withLayout(<Placeholder />)} />
