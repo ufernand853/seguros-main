@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLayout from "./layout/AppLayout";
 
@@ -17,6 +17,7 @@ import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
 import VerCliente from "./pages/VerCliente";
+import EntrySelector from "./pages/EntrySelector";
 
 
 
@@ -50,8 +51,8 @@ export default function App() {
       <Route path="/configuracion" element={withLayout(<UserMaintenance />)} />
 
 
-      {/* Redirect raíz */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Selector de portal en la raíz */}
+      <Route path="/" element={<EntrySelector />} />
 
       {/* Fallback */}
       <Route path="*" element={withLayout(<Placeholder />)} />
