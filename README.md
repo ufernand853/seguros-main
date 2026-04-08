@@ -34,6 +34,7 @@ Proyecto prototipo visual “Gestión de seguros”
   - `ACCESS_TTL_SECONDS` → segundos de vigencia del access token (por defecto 7200 = 2h).
   - `REFRESH_TTL_SECONDS` → segundos de vigencia del refresh token (por defecto 86400 = 24h).
   - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `http://localhost:4000/api` o `/api`).
+  - `VITE_GANADERIA_URL` → URL pública del módulo de ganadería (ejemplo `https://apps.midominio.com/EstablecimientoGanadero`). Si no se define, se arma automáticamente con el mismo host del navegador y puerto `3000`.
 
 - Puedes usar el archivo `.env.example` incluido en el repo y copiarlo como `.env` para comenzar rápido:
 
@@ -48,12 +49,14 @@ REFRESH_TTL_SECONDS=86400
 
 # Frontend
 VITE_API_URL=http://localhost:4000/api
+VITE_GANADERIA_URL=https://apps.midominio.com/EstablecimientoGanadero
 ```
 - Provisionar la base de datos limpia (crea solo un usuario admin configurable por env):
   - `npm run seed:mongo`
 - Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
+- Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.
 - Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4000/api/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta o usa `/api` para proxear al backend desde Vite.
 
 - Estado actual:
