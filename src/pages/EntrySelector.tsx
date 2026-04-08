@@ -1,5 +1,5 @@
 export default function EntrySelector() {
-  const defaultGanaderiaUrl = `${window.location.protocol}//${window.location.hostname}:3000/EstablecimientoGanadero`;
+  const defaultGanaderiaUrl = "/EstablecimientoGanadero";
   const ganaderiaUrl = import.meta.env.VITE_GANADERIA_URL || defaultGanaderiaUrl;
 
   return (

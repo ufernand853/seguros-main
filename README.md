@@ -34,7 +34,7 @@ Proyecto prototipo visual “Gestión de seguros”
   - `ACCESS_TTL_SECONDS` → segundos de vigencia del access token (por defecto 7200 = 2h).
   - `REFRESH_TTL_SECONDS` → segundos de vigencia del refresh token (por defecto 86400 = 24h).
   - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `http://localhost:4000/api` o `/api`).
-  - `VITE_GANADERIA_URL` → URL pública del módulo de ganadería (ejemplo `https://apps.midominio.com/EstablecimientoGanadero`). Si no se define, se arma automáticamente con el mismo host del navegador y puerto `3000`.
+  - `VITE_GANADERIA_URL` → URL pública del módulo de ganadería (ejemplo `https://apps.midominio.com/EstablecimientoGanadero`). Si no se define, se usa `/EstablecimientoGanadero` sobre el mismo origen (sin forzar `localhost` ni puerto).
 
 - Puedes usar el archivo `.env.example` incluido en el repo y copiarlo como `.env` para comenzar rápido:
 
