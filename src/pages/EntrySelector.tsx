@@ -1,4 +1,7 @@
 export default function EntrySelector() {
+  const defaultGanaderiaUrl = `${window.location.protocol}//${window.location.hostname}:3000/EstablecimientoGanadero`;
+  const ganaderiaUrl = import.meta.env.VITE_GANADERIA_URL || defaultGanaderiaUrl;
+
   return (
     <main className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
       <section className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8">
@@ -21,7 +24,7 @@ export default function EntrySelector() {
           </a>
 
           <a
-            href="https://127.0.0.1:3000/EstablecimientoGanadero"
+            href={ganaderiaUrl}
             className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 hover:bg-emerald-100 transition block"
           >
             <h2 className="text-xl font-semibold text-emerald-900 mb-2">Ganadería</h2>
