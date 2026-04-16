@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import UploadModal from "../components/UploadModal";
 import type { DocumentAttachment } from "../components/UploadModal";
 import { useAuth } from "../auth/AuthProvider";
@@ -61,6 +62,7 @@ const CLAIM_DOCUMENT_CATEGORIES = [
 
 export default function ClaimRegistration() {
   const { token } = useAuth();
+  const [searchParams] = useSearchParams();
   const [claimForm, setClaimForm] = useState({
     clienteId: "",
     asegurado: "",
@@ -313,6 +315,16 @@ export default function ClaimRegistration() {
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los datos de siniestros"))
       .finally(() => setLoadingData(false));
   }, [token]);
+
+  useEffect(() => {
+    const clientFromQuery = searchParams.get("clienteId");
+    if (!clientFromQuery || clients.length === 0) return;
+    if (claimForm.clienteId === clientFromQuery) return;
+
+    const exists = clients.some((client) => client.id === clientFromQuery);
+    if (!exists) return;
+    handleClientChange(clientFromQuery);
+  }, [searchParams, clients, claimForm.clienteId]);
 
   const toggleChecklist = (field: keyof typeof documentChecklist) => {
     setDocumentChecklist((current) => ({ ...current, [field]: !current[field] }));
