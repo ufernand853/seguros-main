@@ -17,6 +17,7 @@ import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
 import VerCliente from "./pages/VerCliente";
+import ClientWorkflow from "./pages/ClientWorkflow";
 import AICommands from "./pages/AICommands";
 import AISettings from "./pages/AISettings";
 import AIChanges from "./pages/AIChanges";
