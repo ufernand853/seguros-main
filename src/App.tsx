@@ -17,7 +17,6 @@ import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
 import VerCliente from "./pages/VerCliente";
-import ClientWorkflow from "./pages/ClientWorkflow";
 import AICommands from "./pages/AICommands";
 import AISettings from "./pages/AISettings";
 import AIChanges from "./pages/AIChanges";
@@ -39,7 +38,6 @@ export default function App() {
 
       {/* Páginas con layout */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
-      <Route path="/workflow/clientes" element={withLayout(<ClientWorkflow />)} />
       <Route path="/pipeline" element={withLayout(<PolicyPipeline />)} />
       <Route path="/produccion" element={withLayout(<ProductionControl />)} />
       <Route path="/renovaciones" element={withLayout(<PolicyRenewals />)} />
