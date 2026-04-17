@@ -39,6 +39,7 @@ export default function App() {
 
       {/* Páginas con layout */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
+      <Route path="/workflow/clientes" element={withLayout(<ClientWorkflow />)} />
       <Route path="/pipeline" element={withLayout(<PolicyPipeline />)} />
       <Route path="/produccion" element={withLayout(<ProductionControl />)} />
       <Route path="/renovaciones" element={withLayout(<PolicyRenewals />)} />

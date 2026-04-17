@@ -67,6 +67,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 }
 
 function getSectionTitle(pathname: string) {
+  if (pathname.startsWith("/workflow/clientes")) return "Workflow de clientes";
   if (pathname.startsWith("/clientes/polizas")) return "Pólizas";
   if (pathname.startsWith("/clientes")) return "Clientes";
   if (pathname.startsWith("/pipeline")) return "Pólizas";
