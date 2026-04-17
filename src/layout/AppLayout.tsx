@@ -75,6 +75,9 @@ function getSectionTitle(pathname: string) {
   if (pathname.startsWith("/gestiones")) return "Seguimiento de gestiones";
   if (pathname.startsWith("/aseguradoras")) return "Aseguradoras";
   if (pathname.startsWith("/siniestros")) return "Siniestros";
+  if (pathname.startsWith("/ia/comandos")) return "Modo IA";
+  if (pathname.startsWith("/ia/configuracion")) return "Configuración IA";
+  if (pathname.startsWith("/ia/cambios")) return "Historial IA y Undo";
   if (pathname.startsWith("/configuracion")) return "Configuración";
   if (pathname.startsWith("/dashboard")) return "Dashboard";
   return "Sección";
