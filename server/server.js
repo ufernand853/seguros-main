@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 4000;
 const ACCESS_TTL_SECONDS = Number(process.env.ACCESS_TTL_SECONDS || 60 * 60 * 2); // 2h
 const REFRESH_TTL_SECONDS = Number(process.env.REFRESH_TTL_SECONDS || 60 * 60 * 24); // 24h
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+const OPENAI_MODEL_DEFAULT = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const app = express();
 app.use(cors());
@@ -353,6 +356,189 @@ async function authenticate(req, res, next) {
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Solo administradores pueden realizar esta acción" });
   return next();
+}
+
+function safeCompareString(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  if (aBuffer.length !== bBuffer.length) return false;
+  return timingSafeEqual(aBuffer, bBuffer);
+}
+
+function validateAdminCredentialsPayload(payload = {}) {
+  const { username, password } = payload;
+  if (!username || !password) return false;
+  return safeCompareString(username, ADMIN_USERNAME) && safeCompareString(password, ADMIN_PASSWORD);
+}
+
+const COMMAND_CONFIRM_WORDS = new Set(["hazlo", "confirmado", "confirmar", "ok", "dale"]);
+const AI_SUPPORTED_INTENTS = new Set(["TASK_CREATE", "TASK_COMPLETE", "CLAIM_ARCHIVE"]);
+
+function isConfirmWord(input) {
+  if (typeof input !== "string") return false;
+  const normalized = input.trim().toLowerCase();
+  return COMMAND_CONFIRM_WORDS.has(normalized);
+}
+
+function parseCommandFromText(rawPrompt = "") {
+  const prompt = String(rawPrompt || "").trim();
+  const normalized = prompt.toLowerCase();
+  if (!prompt) return null;
+
+  const createTaskMatch = prompt.match(/(?:crear|agendar)\s+tarea[:\s-]+(.+)/i);
+  if (createTaskMatch?.[1]) {
+    return {
+      intent: "TASK_CREATE",
+      complete: true,
+      missingFields: [],
+      payload: {
+        title: createTaskMatch[1].trim(),
+      },
+      summary: `Crear tarea: "${createTaskMatch[1].trim()}"`,
+    };
+  }
+
+  const completeTaskMatch = normalized.match(/(?:completar|cerrar|finalizar)\s+tarea\s+([a-zA-Z0-9-]+)/i);
+  if (completeTaskMatch?.[1]) {
+    return {
+      intent: "TASK_COMPLETE",
+      complete: true,
+      missingFields: [],
+      payload: {
+        task_id: completeTaskMatch[1],
+      },
+      summary: `Marcar tarea ${completeTaskMatch[1]} como completada`,
+    };
+  }
+
+  const archiveClaimMatch = normalized.match(/(?:archivar|cerrar)\s+siniestro\s+([a-zA-Z0-9-]+)/i);
+  if (archiveClaimMatch?.[1]) {
+    return {
+      intent: "CLAIM_ARCHIVE",
+      complete: true,
+      missingFields: [],
+      payload: {
+        claim_id: archiveClaimMatch[1],
+      },
+      summary: `Archivar siniestro ${archiveClaimMatch[1]}`,
+    };
+  }
+
+  if (normalized.includes("tarea")) {
+    return {
+      intent: "TASK_CREATE",
+      complete: false,
+      missingFields: ["title"],
+      payload: {},
+      summary: "Falta describir el título de la tarea",
+    };
+  }
+
+  return null;
+}
+
+async function recordCommandLog(db, entry = {}) {
+  const doc = {
+    _id: randomUUID(),
+    type: entry.type ?? "UNKNOWN",
+    status: entry.status ?? "info",
+    user_id: entry.userId ?? null,
+    prompt: entry.prompt ?? null,
+    confirmation_token: entry.confirmationToken ?? null,
+    intent: entry.intent ?? null,
+    detail: entry.detail ?? null,
+    metadata: entry.metadata ?? null,
+    created_at: new Date(),
+  };
+  await db.collection("command_logs").insertOne(doc);
+  return doc;
+}
+
+async function getAiSettings(db) {
+  return db.collection("settings").findOne({ _id: "ai_settings" });
+}
+
+async function resolveOpenAiConfig(db) {
+  const settings = await getAiSettings(db);
+  const apiKey = settings?.openAiApiKey || process.env.OPENAI_API_KEY || null;
+  const model = settings?.openAiModel || OPENAI_MODEL_DEFAULT;
+  return { apiKey, model, updatedAt: settings?.updatedAt ?? null };
+}
+
+async function callOpenAiChat({ apiKey, model, messages }) {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.2,
+    }),
+  });
+
+  const text = await response.text();
+  let payload = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (!response.ok) {
+    const detail = payload?.error?.message || text || `OpenAI error ${response.status}`;
+    throw new Error(detail);
+  }
+
+  return payload?.choices?.[0]?.message?.content?.trim() || "";
+}
+
+async function buildBusinessSnapshot(db) {
+  const [insurersCount, clientsCount, openClaims, pendingTasks] = await Promise.all([
+    db.collection("insurers").countDocuments({}),
+    db.collection("clients").countDocuments({}),
+    db.collection("claims").countDocuments({ deleted_at: { $exists: false } }),
+    db.collection("tasks").countDocuments({ status: { $in: ["pendiente", "en_curso"] } }),
+  ]);
+  const recentClaims = await db
+    .collection("claims")
+    .find({ deleted_at: { $exists: false } }, { projection: { _id: 1, claim_id: 1, status: 1, created_at: 1, summary: 1 } })
+    .sort({ created_at: -1 })
+    .limit(5)
+    .toArray();
+
+  return {
+    insurersCount,
+    clientsCount,
+    openClaims,
+    pendingTasks,
+    recentClaims: recentClaims.map((c) => ({
+      id: String(c._id),
+      claimCode: c.claim_id ?? null,
+      status: c.status ?? null,
+      createdAt: c.created_at ?? null,
+      summary: c.summary ?? null,
+    })),
+  };
+}
+
+function mapConfirmationRecord(item) {
+  if (!item) return null;
+  return {
+    id: String(item._id),
+    confirmationToken: item.confirmationToken,
+    intent: item.parsedIntent?.intent ?? null,
+    summary: item.summary ?? null,
+    payload: item.parsedIntent?.payload ?? null,
+    createdAt: item.createdAt ?? null,
+    undoneAt: item.undoneAt ?? null,
+    undoReason: item.undoReason ?? null,
+  };
 }
 
 const api = express.Router();
@@ -1999,6 +2185,346 @@ api.delete("/insurers/:id", authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[insurers delete]", err);
     res.status(500).json({ error: "No se pudo eliminar la aseguradora" });
+  }
+});
+
+api.get("/admin/openai-settings", authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const db = getDb();
+    const config = await resolveOpenAiConfig(db);
+    res.json({
+      configured: Boolean(config.apiKey),
+      model: config.model,
+      updatedAt: config.updatedAt,
+    });
+  } catch (err) {
+    console.error("[admin/openai-settings get]", err);
+    res.status(500).json({ error: "No se pudo recuperar la configuración de IA" });
+  }
+});
+
+api.post("/admin/openai-settings", authenticate, requireAdmin, async (req, res) => {
+  const { username, password, apiKey, model } = req.body || {};
+  if (!validateAdminCredentialsPayload({ username, password })) {
+    return res.status(401).json({ error: "Credenciales de administrador inválidas" });
+  }
+  if (!apiKey || typeof apiKey !== "string") return res.status(400).json({ error: "apiKey es requerida" });
+  try {
+    const db = getDb();
+    const updatedAt = new Date();
+    await db.collection("settings").updateOne(
+      { _id: "ai_settings" },
+      {
+        $set: {
+          openAiApiKey: apiKey.trim(),
+          openAiModel: typeof model === "string" && model.trim() ? model.trim() : OPENAI_MODEL_DEFAULT,
+          updatedAt,
+        },
+      },
+      { upsert: true },
+    );
+    await recordCommandLog(db, {
+      type: "AI_SETTINGS_UPDATE",
+      status: "success",
+      userId: req.user?.sub ?? null,
+      detail: "Configuración OpenAI actualizada",
+    });
+    res.json({ ok: true, updatedAt });
+  } catch (err) {
+    console.error("[admin/openai-settings post]", err);
+    res.status(500).json({ error: "No se pudo guardar la configuración de IA" });
+  }
+});
+
+api.post("/admin/openai-settings/test", authenticate, requireAdmin, async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!validateAdminCredentialsPayload({ username, password })) {
+    return res.status(401).json({ error: "Credenciales de administrador inválidas" });
+  }
+  try {
+    const db = getDb();
+    const config = await resolveOpenAiConfig(db);
+    if (!config.apiKey) return res.status(400).json({ ok: false, error: "No hay API key configurada" });
+    const content = await callOpenAiChat({
+      apiKey: config.apiKey,
+      model: config.model,
+      messages: [
+        { role: "system", content: "Responde sólo con la palabra OK." },
+        { role: "user", content: "ping" },
+      ],
+    });
+    res.json({ ok: true, model: config.model, response: content });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err instanceof Error ? err.message : "Error al validar OpenAI" });
+  }
+});
+
+api.post("/commands/parse", authenticate, async (req, res) => {
+  const { prompt } = req.body || {};
+  if (!prompt || typeof prompt !== "string") return res.status(400).json({ error: "prompt es requerido" });
+  try {
+    const db = getDb();
+    const parsed = parseCommandFromText(prompt);
+    await recordCommandLog(db, {
+      type: "COMMAND_PARSE",
+      status: parsed?.complete ? "success" : "info",
+      userId: req.user?.sub ?? null,
+      prompt,
+      intent: parsed?.intent ?? null,
+      detail: parsed ? "Parse ejecutado" : "Sin intención estructurada",
+    });
+    if (!parsed) return res.json({ parsedCommand: null });
+    return res.json({
+      parsedCommand: parsed,
+      confirmationToken: randomUUID(),
+      requestPreview: {
+        summary: parsed.summary,
+        intent: parsed.intent,
+        payload: parsed.payload,
+      },
+    });
+  } catch (err) {
+    console.error("[commands/parse]", err);
+    res.status(500).json({ error: "No se pudo parsear el comando" });
+  }
+});
+
+api.post("/ai/chat", authenticate, async (req, res) => {
+  const { prompt, history } = req.body || {};
+  if (!prompt || typeof prompt !== "string") return res.status(400).json({ error: "prompt es requerido" });
+  try {
+    const db = getDb();
+    const snapshot = await buildBusinessSnapshot(db);
+    const config = await resolveOpenAiConfig(db);
+    const parsedCommand = parseCommandFromText(prompt);
+
+    const fallbackResponse = `Resumen operativo local: ${snapshot.openClaims} siniestros abiertos, ${snapshot.pendingTasks} tareas pendientes, ${snapshot.clientsCount} clientes cargados.`;
+
+    if (!config.apiKey) {
+      await recordCommandLog(db, {
+        type: "AI_CHAT",
+        status: "fallback",
+        userId: req.user?.sub ?? null,
+        prompt,
+        detail: "Sin API key configurada",
+      });
+      return res.json({ response: `${fallbackResponse} (sin API key de OpenAI configurada)`, parsedCommand, fallback: true });
+    }
+
+    const messages = [
+      {
+        role: "system",
+        content:
+          "Eres un asistente experto en seguros. Responde en español, con claridad y foco operativo. Usa el snapshot para contexto.",
+      },
+      ...(Array.isArray(history) ? history.slice(-12) : []).map((item) => ({
+        role: item?.role === "assistant" ? "assistant" : "user",
+        content: String(item?.content || ""),
+      })),
+      { role: "user", content: `Contexto JSON: ${JSON.stringify(snapshot)}\n\nConsulta: ${prompt}` },
+    ];
+
+    try {
+      const response = await callOpenAiChat({
+        apiKey: config.apiKey,
+        model: config.model,
+        messages,
+      });
+      await recordCommandLog(db, {
+        type: "AI_CHAT",
+        status: "success",
+        userId: req.user?.sub ?? null,
+        prompt,
+        intent: parsedCommand?.intent ?? null,
+      });
+      return res.json({ response, parsedCommand, fallback: false });
+    } catch (error) {
+      await recordCommandLog(db, {
+        type: "AI_CHAT",
+        status: "fallback",
+        userId: req.user?.sub ?? null,
+        prompt,
+        detail: error instanceof Error ? error.message : "Error OpenAI",
+      });
+      return res.json({
+        response: `${fallbackResponse} (fallback por error OpenAI)`,
+        parsedCommand,
+        fallback: true,
+      });
+    }
+  } catch (err) {
+    console.error("[ai/chat]", err);
+    res.status(500).json({ error: "No se pudo procesar el chat IA" });
+  }
+});
+
+api.post("/commands/confirm", authenticate, async (req, res) => {
+  const { confirmationToken, parsedIntent, confirmWord } = req.body || {};
+  if (!confirmationToken || typeof confirmationToken !== "string") {
+    return res.status(400).json({ error: "confirmationToken es requerido" });
+  }
+  if (!isConfirmWord(confirmWord)) return res.status(400).json({ error: "Confirmación inválida" });
+  if (!parsedIntent?.intent || !AI_SUPPORTED_INTENTS.has(parsedIntent.intent)) {
+    return res.status(400).json({ error: "Intent no soportado" });
+  }
+  try {
+    const db = getDb();
+    const existing = await db.collection("confirmations").findOne({ confirmationToken });
+    if (existing) {
+      return res.json({ ok: true, alreadyApplied: true, confirmation: mapConfirmationRecord(existing) });
+    }
+
+    const createdEventIds = [];
+    let undoPayload = {};
+    let summary = parsedIntent.summary ?? parsedIntent.intent;
+
+    if (parsedIntent.intent === "TASK_CREATE") {
+      const title = parsedIntent?.payload?.title;
+      if (!title || typeof title !== "string") return res.status(400).json({ error: "title es requerido" });
+      const newTask = {
+        _id: randomUUID(),
+        title: title.trim(),
+        status: "pendiente",
+        created_at: new Date(),
+        updated_at: new Date(),
+        source: "COMMAND",
+      };
+      await db.collection("tasks").insertOne(newTask);
+      createdEventIds.push(newTask._id);
+      undoPayload = { task_id: newTask._id };
+      summary = `Tarea creada (${newTask._id})`;
+    } else if (parsedIntent.intent === "TASK_COMPLETE") {
+      const taskId = parsedIntent?.payload?.task_id;
+      if (!taskId) return res.status(400).json({ error: "task_id es requerido" });
+      const task = await db.collection("tasks").findOne({ _id: String(taskId) });
+      if (!task) return res.status(404).json({ error: "Tarea no encontrada" });
+      await db.collection("tasks").updateOne({ _id: String(taskId) }, { $set: { status: "completada", updated_at: new Date() } });
+      createdEventIds.push(String(taskId));
+      undoPayload = { task_id: String(taskId), previous_status: task.status ?? "pendiente" };
+      summary = `Tarea ${taskId} marcada como completada`;
+    } else if (parsedIntent.intent === "CLAIM_ARCHIVE") {
+      const claimId = parsedIntent?.payload?.claim_id;
+      if (!claimId) return res.status(400).json({ error: "claim_id es requerido" });
+      const claimIds = buildIdList(claimId);
+      const claim = await db.collection("claims").findOne({ _id: { $in: claimIds } });
+      if (!claim) return res.status(404).json({ error: "Siniestro no encontrado" });
+      await db.collection("claims").updateOne({ _id: claim._id }, { $set: { deleted_at: new Date() } });
+      createdEventIds.push(String(claim._id));
+      undoPayload = { claim_id: String(claim._id), previous_deleted_at: claim.deleted_at ?? null };
+      summary = `Siniestro ${claim._id} archivado`;
+    }
+
+    const confirmationDoc = {
+      _id: randomUUID(),
+      confirmationToken,
+      parsedIntent,
+      summary,
+      createdEventIds,
+      undoPayload,
+      confirmedBy: req.user?.sub ?? null,
+      createdAt: new Date(),
+      undoneAt: null,
+      undoReason: null,
+    };
+    await db.collection("confirmations").insertOne(confirmationDoc);
+    await recordCommandLog(db, {
+      type: "COMMAND_CONFIRM",
+      status: "success",
+      userId: req.user?.sub ?? null,
+      confirmationToken,
+      intent: parsedIntent.intent,
+      detail: summary,
+      metadata: { createdEventIds },
+    });
+    res.json({ ok: true, confirmation: mapConfirmationRecord(confirmationDoc) });
+  } catch (err) {
+    console.error("[commands/confirm]", err);
+    res.status(500).json({ error: "No se pudo confirmar el comando" });
+  }
+});
+
+api.get("/commands/confirmed-changes", authenticate, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db.collection("confirmations").find({}).sort({ createdAt: -1 }).limit(100).toArray();
+    res.json({ items: rows.map(mapConfirmationRecord) });
+  } catch (err) {
+    console.error("[commands/confirmed-changes]", err);
+    res.status(500).json({ error: "No se pudieron recuperar cambios confirmados" });
+  }
+});
+
+api.post("/commands/undo", authenticate, async (req, res) => {
+  const { confirmationId, reason } = req.body || {};
+  if (!confirmationId) return res.status(400).json({ error: "confirmationId es requerido" });
+  try {
+    const db = getDb();
+    const confirmation = await db.collection("confirmations").findOne({ _id: String(confirmationId) });
+    if (!confirmation) return res.status(404).json({ error: "Confirmación no encontrada" });
+    if (confirmation.undoneAt) return res.status(400).json({ error: "La confirmación ya fue deshecha" });
+
+    const intent = confirmation?.parsedIntent?.intent;
+    if (intent === "TASK_CREATE") {
+      await db.collection("tasks").deleteOne({ _id: confirmation?.undoPayload?.task_id });
+    } else if (intent === "TASK_COMPLETE") {
+      await db
+        .collection("tasks")
+        .updateOne(
+          { _id: confirmation?.undoPayload?.task_id },
+          { $set: { status: confirmation?.undoPayload?.previous_status ?? "pendiente", updated_at: new Date() } },
+        );
+    } else if (intent === "CLAIM_ARCHIVE") {
+      if (confirmation?.undoPayload?.previous_deleted_at) {
+        await db.collection("claims").updateOne(
+          { _id: confirmation?.undoPayload?.claim_id },
+          { $set: { deleted_at: confirmation.undoPayload.previous_deleted_at } },
+        );
+      } else {
+        await db.collection("claims").updateOne(
+          { _id: confirmation?.undoPayload?.claim_id },
+          { $unset: { deleted_at: "" } },
+        );
+      }
+    } else {
+      return res.status(400).json({ error: "Tipo de confirmación no reversible" });
+    }
+
+    const undoneAt = new Date();
+    await db.collection("confirmations").updateOne(
+      { _id: confirmation._id },
+      {
+        $set: {
+          undoneAt,
+          undoReason: typeof reason === "string" && reason.trim() ? reason.trim() : "Undo manual",
+          undoneBy: req.user?.sub ?? null,
+        },
+      },
+    );
+
+    await recordCommandLog(db, {
+      type: "COMMAND_UNDO",
+      status: "success",
+      userId: req.user?.sub ?? null,
+      confirmationToken: confirmation.confirmationToken,
+      intent,
+      detail: `Undo aplicado sobre ${confirmation._id}`,
+    });
+
+    res.json({ ok: true, undoneAt });
+  } catch (err) {
+    console.error("[commands/undo]", err);
+    res.status(500).json({ error: "No se pudo deshacer el cambio" });
+  }
+});
+
+api.get("/command-logs", authenticate, async (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = await db.collection("command_logs").find({}).sort({ created_at: -1 }).limit(200).toArray();
+    res.json({ items: rows.map(mapDocument) });
+  } catch (err) {
+    console.error("[command-logs]", err);
+    res.status(500).json({ error: "No se pudieron recuperar logs de comandos" });
   }
 });
 

@@ -18,7 +18,9 @@ import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
 import VerCliente from "./pages/VerCliente";
 import EntrySelector from "./pages/EntrySelector";
-import ClientWorkflow from "./pages/ClientWorkflow";
+import AICommands from "./pages/AICommands";
+import AISettings from "./pages/AISettings";
+import AIChanges from "./pages/AIChanges";
 
 
 
@@ -52,6 +54,9 @@ export default function App() {
       <Route path="/clientes/polizas" element={withLayout(<ClaimRegistration />)} />
       <Route path="/siniestros/registro" element={withLayout(<ClaimRegistration />)} />
       <Route path="/configuracion" element={withLayout(<UserMaintenance />)} />
+      <Route path="/ia/comandos" element={withLayout(<AICommands />)} />
+      <Route path="/ia/configuracion" element={withLayout(<AISettings />)} />
+      <Route path="/ia/cambios" element={withLayout(<AIChanges />)} />
 
 
       {/* Selector de portal en la raíz */}

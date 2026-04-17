@@ -924,4 +924,126 @@ export async function apiArchiveClaim(claimId: string, accessToken: string): Pro
   });
 }
 
+export type OpenAiSettingsStatus = {
+  configured: boolean;
+  model: string;
+  updatedAt?: string | null;
+};
+
+export async function apiGetOpenAiSettings(accessToken: string): Promise<OpenAiSettingsStatus> {
+  return request("/admin/openai-settings", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiSaveOpenAiSettings(
+  payload: { username: string; password: string; apiKey: string; model?: string },
+  accessToken: string,
+): Promise<{ ok: boolean; updatedAt?: string }> {
+  return request("/admin/openai-settings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiTestOpenAiSettings(
+  payload: { username: string; password: string },
+  accessToken: string,
+): Promise<{ ok: boolean; model?: string; response?: string; error?: string }> {
+  return request("/admin/openai-settings/test", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export type ParsedCommand = {
+  intent: string;
+  complete: boolean;
+  missingFields: string[];
+  payload: Record<string, unknown>;
+  summary?: string;
+};
+
+export async function apiParseCommand(
+  prompt: string,
+  accessToken: string,
+): Promise<{ parsedCommand: ParsedCommand | null; confirmationToken?: string; requestPreview?: any }> {
+  return request("/commands/parse", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ prompt }),
+  });
+}
+
+export async function apiAiChat(
+  payload: { prompt: string; history?: { role: "user" | "assistant"; content: string }[] },
+  accessToken: string,
+): Promise<{ response: string; parsedCommand?: ParsedCommand | null; fallback?: boolean }> {
+  return request("/ai/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiConfirmCommand(
+  payload: { confirmationToken: string; parsedIntent: ParsedCommand; confirmWord: string },
+  accessToken: string,
+): Promise<{ ok: boolean; alreadyApplied?: boolean; confirmation?: any }> {
+  return request("/commands/confirm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiListConfirmedChanges(accessToken: string): Promise<{ items: any[] }> {
+  return request("/commands/confirmed-changes", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function apiUndoCommand(
+  payload: { confirmationId: string; reason?: string },
+  accessToken: string,
+): Promise<{ ok: boolean; undoneAt?: string }> {
+  return request("/commands/undo", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiListCommandLogs(accessToken: string): Promise<{ items: any[] }> {
+  return request("/command-logs", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export const apiConfig = { API_BASE };
