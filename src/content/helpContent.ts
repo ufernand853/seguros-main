@@ -30,11 +30,24 @@ const HELP_SECTIONS: HelpEntry[] = [
     match: (path) => path === "/dashboard" || path === "/",
     content: {
       title: "Dashboard",
-      summary: "Accede rápido a cada módulo del portal mediante los mosaicos.",
+      summary: "Accede rápido a cada módulo del portal mediante los mosaicos, priorizando el workflow por cliente.",
       steps: [
+        "Comienza por 'Workflow por cliente' para seguir el orden cliente → póliza → siniestro.",
         "Pulsa un mosaico para abrir el módulo correspondiente.",
         "Los colores distinguen cada sección clave (pipeline, producción, renovaciones, gestiones, clientes, aseguradoras).",
         "Puedes volver aquí en cualquier momento desde la barra superior.",
+      ],
+    },
+  },
+  {
+    match: startsWith("/workflow/clientes"),
+    content: {
+      title: "Workflow por cliente",
+      summary: "Flujo sugerido para operar de forma simple: cliente, póliza y luego siniestro.",
+      steps: [
+        "Paso 1: entra a Clientes para buscar o crear el cliente base.",
+        "Paso 2: registra/gestiona pólizas del cliente en Pipeline de pólizas.",
+        "Paso 3: registra siniestros vinculando cliente y póliza para mantener trazabilidad.",
       ],
     },
   },

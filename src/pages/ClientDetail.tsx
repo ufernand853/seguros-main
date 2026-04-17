@@ -82,6 +82,20 @@ export default function ClientDetail() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => navigate("/pipeline")}
+            className="px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold"
+          >
+            Cargar póliza
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/siniestros/registro?clienteId=${encodeURIComponent(id)}`)}
+            className="px-4 py-2 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold"
+          >
+            Alta de siniestro
+          </button>
+          <button
+            type="button"
             onClick={() => navigate(`/clientes/${encodeURIComponent(id)}/ficha`)}
             className="px-4 py-2 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-semibold"
           >
