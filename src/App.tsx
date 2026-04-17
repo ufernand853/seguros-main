@@ -17,7 +17,7 @@ import ClaimRegistration from "./pages/ClaimRegistration";
 import ClientDetail from "./pages/ClientDetail";
 import UserMaintenance from "./pages/UserMaintenance";
 import VerCliente from "./pages/VerCliente";
-import EntrySelector from "./pages/EntrySelector";
+import ClientWorkflow from "./pages/ClientWorkflow";
 import AICommands from "./pages/AICommands";
 import AISettings from "./pages/AISettings";
 import AIChanges from "./pages/AIChanges";
@@ -33,8 +33,8 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Selector de portal accesible desde raíz y /login */}
-      <Route path="/login" element={<EntrySelector />} />
+      {/* Login */}
+      <Route path="/login" element={<Login />} />
       <Route path="/seguros/login" element={<Login />} />
 
       {/* Páginas con layout */}
@@ -59,8 +59,8 @@ export default function App() {
       <Route path="/ia/cambios" element={withLayout(<AIChanges />)} />
 
 
-      {/* Selector de portal en la raíz */}
-      <Route path="/" element={<EntrySelector />} />
+      {/* Inicio */}
+      <Route path="/" element={<Login />} />
 
       {/* Fallback */}
       <Route path="*" element={withLayout(<Placeholder />)} />
