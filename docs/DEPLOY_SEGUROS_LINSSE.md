@@ -52,6 +52,8 @@ ADMIN_PASSWORD="CAMBIAR_PASSWORD_ADMIN"
 
 Si se reutiliza la misma cuenta de Mercado Pago que Ganadería, mantener `MERCADOPAGO_ACCESS_TOKEN` y `MERCADOPAGO_PUBLIC_KEY`, pero cambiar todas las URLs a `https://seguros.linsse.com`. Si un secreto real fue pegado en un chat o ticket, rotarlo antes de dejar producción.
 
+Al arrancar, el backend crea o actualiza el usuario administrador usando `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` si están definidos; si no, usa `ADMIN_USERNAME`/`ADMIN_PASSWORD`. Después de cambiar esas credenciales en `.env.production`, reiniciar `seguros-api` para reescribir el hash en MongoDB.
+
 ## Instalación orientativa
 
 1. Copiar el repo a `/home/adminuser/seguros-main`.

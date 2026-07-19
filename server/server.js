@@ -28,6 +28,9 @@ const REFRESH_TTL_SECONDS = Number(process.env.REFRESH_TTL_SECONDS || 60 * 60 * 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+const SEED_ADMIN_NAME = process.env.SEED_ADMIN_NAME || "Administrador";
+const SEED_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || process.env.ADMIN_USERNAME || "admin@seguros.local";
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || "Cambiar123!";
 const OPENAI_MODEL_DEFAULT = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const app = express();
@@ -305,6 +308,39 @@ async function getUserByEmail(email) {
     { email: email.toLowerCase() },
     { projection: { _id: 1, name: 1, email: 1, password_hash: 1, role: 1, tenant_id: 1 } }
   );
+}
+
+async function ensureBootstrapAdminUser() {
+  const db = getDb();
+  const normalizedEmail = String(SEED_ADMIN_EMAIL || "").trim().toLowerCase();
+  const password = String(SEED_ADMIN_PASSWORD || "");
+  if (!normalizedEmail || !password) return;
+
+  const now = new Date();
+  const existing = await db.collection("users").findOne(
+    { email: normalizedEmail },
+    { projection: { _id: 1, role: 1 } },
+  );
+  const payload = {
+    name: SEED_ADMIN_NAME,
+    email: normalizedEmail,
+    role: "admin",
+    password_hash: hashPassword(password),
+    updated_at: now,
+  };
+
+  if (existing) {
+    await db.collection("users").updateOne({ _id: existing._id }, { $set: payload });
+    console.log(`[startup] Admin bootstrap actualizado: ${normalizedEmail}`);
+    return;
+  }
+
+  await db.collection("users").insertOne({
+    _id: randomUUID(),
+    ...payload,
+    created_at: now,
+  });
+  console.log(`[startup] Admin bootstrap creado: ${normalizedEmail}`);
 }
 
 async function getUserById(id) {
@@ -2981,6 +3017,7 @@ app.use((err, _req, res, _next) => {
 connectToDatabase()
   .then(async () => {
     await ensureBillingIndexesAndPlans();
+    await ensureBootstrapAdminUser();
     app.listen(PORT, "127.0.0.1", () => {
       console.log(`[api] listening on http://127.0.0.1:${PORT} for ${PUBLIC_APP_URL}`);
     });
