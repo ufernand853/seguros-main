@@ -16,7 +16,7 @@ const MERCADOPAGO_NOTIFICATION_URL = process.env.MERCADOPAGO_NOTIFICATION_URL ||
 const MERCADOPAGO_SUCCESS_URL = process.env.MERCADOPAGO_SUCCESS_URL || `${PUBLIC_APP_URL}/billing/success`;
 const MERCADOPAGO_PENDING_URL = process.env.MERCADOPAGO_PENDING_URL || `${PUBLIC_APP_URL}/billing/pending`;
 const MERCADOPAGO_FAILURE_URL = process.env.MERCADOPAGO_FAILURE_URL || `${PUBLIC_APP_URL}/billing/failure`;
-const BILLING_WEBHOOK_SECRET = process.env.BILLING_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET || "";
+const BILLING_WEBHOOK_SECRET = process.env.BILLING_WEBHOOK_SECRET || process.env.MERCADOPAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET || "";
 const DEFAULT_TRIAL_DAYS = Number(process.env.DEFAULT_TRIAL_DAYS || 5);
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || "https://seguros.linsse.com")
   .split(",")
