@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type User = { name: string; email?: string; role?: string };
+type License = { tenant: { id: string; name: string }; status: string; plan?: { name: string; slug: string } | null };
+type User = { name: string; email?: string; role?: string; license?: License | null };
 type AuthState = {
   user: User | null;
   token: string | null;
