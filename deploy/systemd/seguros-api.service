@@ -1,0 +1,16 @@
+[Unit]
+Description=Gestión de Seguros API
+After=network.target mongod.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/adminuser/seguros-main
+EnvironmentFile=/home/adminuser/seguros-main/.env.production
+ExecStart=/usr/bin/npm run server
+Restart=always
+RestartSec=5
+User=adminuser
+Group=adminuser
+
+[Install]
+WantedBy=multi-user.target
