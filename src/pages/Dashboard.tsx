@@ -1,5 +1,6 @@
 // src/pages/Dashboard.tsx
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 
 type Tile = { label: string; path: string; bg?: string };
 
@@ -22,17 +23,30 @@ const TILES: Tile[] = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const open = (p: string) => navigate(p);
+  const license = user?.license;
 
   return (
-    <div
-      className="
-        flex-1 grid gap-6
-        grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
-        auto-rows-fr
-      "
-    >
-      {TILES.map((t) => (
+    <div className="flex-1 space-y-6">
+      {license && (
+        <section className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-indigo-500">Licencia SaaS</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">{license.tenant.name}</span>
+            <span className="rounded-full bg-indigo-50 px-3 py-1 font-semibold text-indigo-700">{license.status}</span>
+            {license.plan && <span>Plan {license.plan.name}</span>}
+          </div>
+        </section>
+      )}
+      <div
+        className="
+          grid gap-6
+          grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+          auto-rows-fr
+        "
+      >
+        {TILES.map((t) => (
         <button
           key={t.path}
           onClick={() => open(t.path)}
@@ -44,7 +58,8 @@ export default function Dashboard() {
         >
           <span className="text-2xl md:text-3xl font-bold">{t.label}</span>
         </button>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

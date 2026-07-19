@@ -4,6 +4,7 @@ import AppLayout from "./layout/AppLayout";
 
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import RegisterSaas from "./pages/RegisterSaas";
 import Placeholder from "./pages/Placeholder";
 import Clientes from "./pages/Clientes";
 import NuevoCliente from "./pages/NuevoCliente";
@@ -35,6 +36,8 @@ export default function App() {
       {/* Login */}
       <Route path="/login" element={<Login />} />
       <Route path="/seguros/login" element={<Login />} />
+      <Route path="/registro" element={<RegisterSaas />} />
+      <Route path="/seguros/registro" element={<RegisterSaas />} />
 
       {/* Páginas con layout */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
