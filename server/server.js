@@ -2,13 +2,27 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import jwt from "jsonwebtoken";
-import { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { UUID } from "bson";
 import { closeConnection, connectToDatabase, getDb } from "./db.js";
 import { POLICY_ROLE_KEYS, buildPolicyRoleEntries, normalizeRoleAssignments } from "./policyRoles.js";
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4020;
+const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || process.env.SAAS_PUBLIC_URL || "https://seguros.linsse.com";
+const MERCADOPAGO_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || "";
+const MERCADOPAGO_CURRENCY = process.env.MERCADOPAGO_CURRENCY || "UYU";
+const MERCADOPAGO_NOTIFICATION_URL = process.env.MERCADOPAGO_NOTIFICATION_URL || `${PUBLIC_APP_URL}/api/webhooks/mercadopago`;
+const MERCADOPAGO_SUCCESS_URL = process.env.MERCADOPAGO_SUCCESS_URL || `${PUBLIC_APP_URL}/billing/success`;
+const MERCADOPAGO_PENDING_URL = process.env.MERCADOPAGO_PENDING_URL || `${PUBLIC_APP_URL}/billing/pending`;
+const MERCADOPAGO_FAILURE_URL = process.env.MERCADOPAGO_FAILURE_URL || `${PUBLIC_APP_URL}/billing/failure`;
+const BILLING_WEBHOOK_SECRET = process.env.BILLING_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET || "";
+const DEFAULT_TRIAL_DAYS = Number(process.env.DEFAULT_TRIAL_DAYS || 5);
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "https://seguros.linsse.com")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const TRUST_PROXY = process.env.TRUST_PROXY ?? "loopback";
 const ACCESS_TTL_SECONDS = Number(process.env.ACCESS_TTL_SECONDS || 60 * 60 * 2); // 2h
 const REFRESH_TTL_SECONDS = Number(process.env.REFRESH_TTL_SECONDS || 60 * 60 * 24); // 24h
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
@@ -17,8 +31,30 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 const OPENAI_MODEL_DEFAULT = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: "20mb" }));
+app.set("trust proxy", TRUST_PROXY);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || CORS_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error(`Origen CORS no permitido: ${origin}`));
+    },
+    credentials: true,
+  }),
+);
+app.use(
+  express.json({
+    limit: "20mb",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  }),
+);
+
+function hashPassword(plainText) {
+  const salt = randomBytes(16).toString("hex");
+  const hashed = scryptSync(plainText, salt, 64).toString("hex");
+  return `${salt}:${hashed}`;
+}
 
 function verifyPassword(password, stored) {
   if (!stored || !password) return false;
@@ -30,7 +66,7 @@ function verifyPassword(password, stored) {
 }
 
 function signAccessToken(user) {
-  return jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, {
+  return jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role, tenantId: user.tenant_id ?? null }, JWT_SECRET, {
     expiresIn: ACCESS_TTL_SECONDS,
   });
 }
@@ -267,13 +303,58 @@ async function getUserByEmail(email) {
   const db = getDb();
   return db.collection("users").findOne(
     { email: email.toLowerCase() },
-    { projection: { _id: 1, name: 1, email: 1, password_hash: 1, role: 1 } }
+    { projection: { _id: 1, name: 1, email: 1, password_hash: 1, role: 1, tenant_id: 1 } }
   );
 }
 
 async function getUserById(id) {
   const db = getDb();
-  return db.collection("users").findOne({ _id: String(id) }, { projection: { _id: 1, name: 1, email: 1, role: 1 } });
+  return db.collection("users").findOne({ _id: String(id) }, { projection: { _id: 1, name: 1, email: 1, role: 1, tenant_id: 1 } });
+}
+
+async function getLicenseForUser(user) {
+  if (!user?.tenant_id) return null;
+  const db = getDb();
+  const tenant = await db.collection("tenants").findOne({ _id: user.tenant_id });
+  if (!tenant) return null;
+  const plan = tenant.plan_id ? await db.collection("plans").findOne({ _id: tenant.plan_id }) : null;
+  return {
+    tenant: { id: tenant._id, name: tenant.name },
+    status: tenant.subscription_status ?? "unknown",
+    trialEndsAt: tenant.trial_ends_at ?? null,
+    currentPeriodEndsAt: tenant.current_period_ends_at ?? null,
+    plan: plan ? mapPlan(plan) : null,
+  };
+}
+
+function isSubscriptionUsable(tenant) {
+  if (!tenant) return true;
+  const status = tenant.subscription_status;
+  if (["active", "trialing"].includes(status)) return true;
+  if (tenant.trial_ends_at && new Date(tenant.trial_ends_at).getTime() > Date.now()) return true;
+  return false;
+}
+
+async function requireActiveSubscription(req, res, next) {
+  if (!req.user?.tenantId) return next();
+  try {
+    const db = getDb();
+    const tenant = await db.collection("tenants").findOne({ _id: req.user.tenantId });
+    if (!tenant) return res.status(403).json({ error: "Tenant no encontrado" });
+    if (!isSubscriptionUsable(tenant)) {
+      return res.status(402).json({ error: "Suscripción inactiva", subscriptionStatus: tenant.subscription_status });
+    }
+    req.tenant = tenant;
+    return next();
+  } catch (err) {
+    console.error("[subscription guard]", err);
+    return res.status(500).json({ error: "No se pudo validar la suscripción" });
+  }
+}
+
+function tenantFilter(req, base = {}) {
+  if (!req.user?.tenantId) return base;
+  return { ...base, tenant_id: req.user.tenantId };
 }
 
 async function ensureClientsExist(clientIds) {
@@ -541,6 +622,182 @@ function mapConfirmationRecord(item) {
   };
 }
 
+
+const BILLING_STATUS_BY_MP_STATUS = {
+  authorized: "active",
+  active: "active",
+  pending: "pending",
+  paused: "paused",
+  cancelled: "canceled",
+  canceled: "canceled",
+  rejected: "rejected",
+};
+
+const DEFAULT_PLANS = [
+  {
+    _id: "plan-basico",
+    slug: "basico",
+    name: "Básico",
+    description: "Plan inicial para productores y corredores pequeños.",
+    price: 1500,
+    currency: MERCADOPAGO_CURRENCY,
+    interval: "monthly",
+    limits: { users: 3, clients: 250, storageMb: 1024 },
+    active: true,
+  },
+  {
+    _id: "plan-pro",
+    slug: "pro",
+    name: "Pro",
+    description: "Plan para equipos comerciales con cartera en crecimiento.",
+    price: 3900,
+    currency: MERCADOPAGO_CURRENCY,
+    interval: "monthly",
+    limits: { users: 10, clients: 1500, storageMb: 5120 },
+    active: true,
+  },
+  {
+    _id: "plan-empresa",
+    slug: "empresa",
+    name: "Empresa",
+    description: "Plan avanzado con límites amplios y soporte prioritario.",
+    price: 7900,
+    currency: MERCADOPAGO_CURRENCY,
+    interval: "monthly",
+    limits: { users: 50, clients: 10000, storageMb: 20480 },
+    active: true,
+  },
+];
+
+async function ensureBillingIndexesAndPlans() {
+  const db = getDb();
+  await Promise.all([
+    db.collection("plans").createIndex({ slug: 1 }, { unique: true }),
+    db.collection("tenants").createIndex({ billing_email: 1 }),
+    db.collection("subscriptions").createIndex({ tenant_id: 1, provider: 1, status: 1 }),
+    db.collection("subscriptions").createIndex({ provider_subscription_id: 1 }, { sparse: true }),
+    db.collection("billing_events").createIndex({ provider: 1, event_id: 1 }, { unique: true, sparse: true }),
+  ]);
+
+  for (const plan of DEFAULT_PLANS) {
+    await db.collection("plans").updateOne(
+      { slug: plan.slug },
+      { $setOnInsert: { created_at: new Date() }, $set: { ...plan, updated_at: new Date() } },
+      { upsert: true },
+    );
+  }
+}
+
+function mapPlan(plan) {
+  return {
+    id: String(plan._id),
+    slug: plan.slug,
+    name: plan.name,
+    description: plan.description ?? null,
+    price: plan.price,
+    currency: plan.currency,
+    interval: plan.interval,
+    limits: plan.limits ?? {},
+  };
+}
+
+function normalizeMercadoPagoSubscriptionStatus(status) {
+  return BILLING_STATUS_BY_MP_STATUS[String(status || "").toLowerCase()] || "pending";
+}
+
+function verifyWebhookSignature(req) {
+  if (!BILLING_WEBHOOK_SECRET) return true;
+  const signature = req.headers["x-webhook-signature"] || req.headers["x-signature"];
+  if (Array.isArray(signature)) return false;
+  if (!signature) return false;
+  const digest = createHmac("sha256", BILLING_WEBHOOK_SECRET).update(req.rawBody || JSON.stringify(req.body || {})).digest("hex");
+  const normalized = String(signature).replace(/^sha256=/, "");
+  return safeCompareString(digest, normalized);
+}
+
+async function createMercadoPagoPreapproval({ tenant, plan, subscription }) {
+  if (!MERCADOPAGO_ACCESS_TOKEN) {
+    return {
+      providerSubscriptionId: null,
+      initPoint: null,
+      rawProviderData: { skipped: true, reason: "MERCADOPAGO_ACCESS_TOKEN no configurado" },
+    };
+  }
+
+  const payload = {
+    reason: `${plan.name} - Gestión de Seguros`,
+    external_reference: subscription._id,
+    payer_email: tenant.billing_email,
+    auto_recurring: {
+      frequency: 1,
+      frequency_type: "months",
+      transaction_amount: plan.price,
+      currency_id: plan.currency || MERCADOPAGO_CURRENCY,
+    },
+    back_url: MERCADOPAGO_SUCCESS_URL,
+    notification_url: MERCADOPAGO_NOTIFICATION_URL,
+  };
+
+  const response = await fetch("https://api.mercadopago.com/preapproval", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${MERCADOPAGO_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": subscription._id,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.message || `Mercado Pago respondió ${response.status}`);
+  return {
+    providerSubscriptionId: data?.id ?? null,
+    initPoint: data?.init_point ?? data?.sandbox_init_point ?? null,
+    rawProviderData: data,
+  };
+}
+
+async function syncSubscriptionFromProviderPayload(payload = {}) {
+  const db = getDb();
+  const providerSubscriptionId = payload.id || payload.data?.id || payload.preapproval_id || payload.subscription_id;
+  const externalReference = payload.external_reference || payload.externalReference || null;
+  const status = normalizeMercadoPagoSubscriptionStatus(payload.status || payload.action || payload.type);
+  const filter = providerSubscriptionId
+    ? { provider: "mercadopago", provider_subscription_id: String(providerSubscriptionId) }
+    : externalReference
+      ? { _id: String(externalReference) }
+      : null;
+  if (!filter) return null;
+
+  const subscription = await db.collection("subscriptions").findOne(filter);
+  if (!subscription) return null;
+
+  const currentPeriodEndsAt = payload.next_payment_date ? new Date(payload.next_payment_date) : subscription.current_period_ends_at;
+  await db.collection("subscriptions").updateOne(
+    { _id: subscription._id },
+    {
+      $set: {
+        status,
+        provider_subscription_id: providerSubscriptionId ? String(providerSubscriptionId) : subscription.provider_subscription_id,
+        current_period_ends_at: currentPeriodEndsAt ?? null,
+        raw_provider_data: payload,
+        updated_at: new Date(),
+      },
+    },
+  );
+  await db.collection("tenants").updateOne(
+    { _id: subscription.tenant_id },
+    {
+      $set: {
+        subscription_status: status,
+        mercado_pago_subscription_id: providerSubscriptionId ? String(providerSubscriptionId) : subscription.provider_subscription_id,
+        current_period_ends_at: currentPeriodEndsAt ?? null,
+        updated_at: new Date(),
+      },
+    },
+  );
+  return { ...subscription, status };
+}
+
 const api = express.Router();
 
 // Compatibilidad: redirige /health a /api/health (si algún monitoreo antiguo lo usa)
@@ -558,6 +815,187 @@ api.get("/health", async (_req, res) => {
   }
 });
 
+
+api.get("/public/plans", async (_req, res) => {
+  try {
+    const db = getDb();
+    const plans = await db.collection("plans").find({ active: true }).sort({ price: 1 }).toArray();
+    res.json({ items: plans.map(mapPlan) });
+  } catch (err) {
+    console.error("[public/plans]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los planes" });
+  }
+});
+
+api.post("/public/register", async (req, res) => {
+  const { companyName, name, email, password, planSlug = "basico" } = req.body || {};
+  if (!companyName || !name || !email || !password) {
+    return res.status(400).json({ error: "Empresa, nombre, email y contraseña son requeridos" });
+  }
+
+  try {
+    const db = getDb();
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const existingUser = await db.collection("users").findOne({ email: normalizedEmail }, { projection: { _id: 1 } });
+    if (existingUser) return res.status(409).json({ error: "Ya existe un usuario con ese email" });
+
+    const plan = await db.collection("plans").findOne({ slug: String(planSlug), active: true });
+    if (!plan) return res.status(400).json({ error: "Plan inválido" });
+
+    const now = new Date();
+    const trialEndsAt = DEFAULT_TRIAL_DAYS > 0 ? new Date(now.getTime() + DEFAULT_TRIAL_DAYS * 24 * 60 * 60 * 1000) : null;
+    const tenant = {
+      _id: randomUUID(),
+      name: String(companyName).trim(),
+      billing_email: normalizedEmail,
+      plan_id: plan._id,
+      subscription_status: plan.price > 0 ? "pending" : "trialing",
+      trial_ends_at: trialEndsAt,
+      current_period_ends_at: null,
+      mercado_pago_subscription_id: null,
+      created_at: now,
+      updated_at: now,
+    };
+    const user = {
+      _id: randomUUID(),
+      tenant_id: tenant._id,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      password_hash: hashPassword(String(password)),
+      role: "admin",
+      roles: ["admin"],
+      status: "Activo",
+      created_at: now,
+      updated_at: now,
+    };
+    const subscription = {
+      _id: randomUUID(),
+      tenant_id: tenant._id,
+      plan_id: plan._id,
+      provider: "mercadopago",
+      provider_subscription_id: null,
+      init_point: null,
+      status: plan.price > 0 ? "pending" : "active",
+      payer_email: normalizedEmail,
+      amount: plan.price,
+      currency: plan.currency || MERCADOPAGO_CURRENCY,
+      started_at: null,
+      current_period_ends_at: null,
+      canceled_at: null,
+      raw_provider_data: null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    await db.collection("tenants").insertOne(tenant);
+    await db.collection("users").insertOne(user);
+    await db.collection("subscriptions").insertOne(subscription);
+
+    let checkout = null;
+    if (plan.price > 0) {
+      checkout = await createMercadoPagoPreapproval({ tenant, plan, subscription });
+      await db.collection("subscriptions").updateOne(
+        { _id: subscription._id },
+        {
+          $set: {
+            provider_subscription_id: checkout.providerSubscriptionId,
+            init_point: checkout.initPoint,
+            raw_provider_data: checkout.rawProviderData,
+            updated_at: new Date(),
+          },
+        },
+      );
+      await db.collection("tenants").updateOne(
+        { _id: tenant._id },
+        { $set: { mercado_pago_subscription_id: checkout.providerSubscriptionId, updated_at: new Date() } },
+      );
+    }
+
+    res.status(201).json({
+      tenant: { id: tenant._id, name: tenant.name, subscriptionStatus: tenant.subscription_status },
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      plan: mapPlan(plan),
+      subscription: {
+        id: subscription._id,
+        status: subscription.status,
+        provider: subscription.provider,
+        initPoint: checkout?.initPoint ?? null,
+        providerSubscriptionId: checkout?.providerSubscriptionId ?? null,
+      },
+    });
+  } catch (err) {
+    console.error("[public/register]", err);
+    res.status(500).json({ error: "No se pudo crear la cuenta SaaS" });
+  }
+});
+
+api.post("/webhooks/mercadopago", async (req, res) => {
+  if (!verifyWebhookSignature(req)) return res.status(401).json({ error: "Firma inválida" });
+
+  try {
+    const db = getDb();
+    const eventId = String(req.body?.id || req.body?.data?.id || req.headers["x-request-id"] || randomUUID());
+    try {
+      await db.collection("billing_events").insertOne({
+        _id: randomUUID(),
+        provider: "mercadopago",
+        event_id: eventId,
+        payload: req.body,
+        processed_at: null,
+        created_at: new Date(),
+      });
+    } catch (err) {
+      if (err?.code === 11000) return res.json({ ok: true, duplicate: true });
+      throw err;
+    }
+
+    let providerPayload = req.body || {};
+    const providerResourceId = req.body?.data?.id || req.body?.id;
+    if (MERCADOPAGO_ACCESS_TOKEN && providerResourceId) {
+      const mpResponse = await fetch(`https://api.mercadopago.com/preapproval/${providerResourceId}`, {
+        headers: { Authorization: `Bearer ${MERCADOPAGO_ACCESS_TOKEN}` },
+      });
+      if (mpResponse.ok) providerPayload = await mpResponse.json();
+    }
+
+    const subscription = await syncSubscriptionFromProviderPayload(providerPayload);
+    await db.collection("billing_events").updateOne(
+      { provider: "mercadopago", event_id: eventId },
+      { $set: { processed_at: new Date(), subscription_id: subscription?._id ?? null, provider_payload: providerPayload } },
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[webhooks/mercadopago]", err);
+    res.status(500).json({ error: "No se pudo procesar el webhook" });
+  }
+});
+
+api.get("/billing/license", authenticate, async (req, res) => {
+  try {
+    const db = getDb();
+    const user = await getUserById(req.user?.sub);
+    if (!user?.tenant_id) return res.status(404).json({ error: "Usuario sin tenant asociado" });
+    const tenant = await db.collection("tenants").findOne({ _id: user.tenant_id });
+    if (!tenant) return res.status(404).json({ error: "Tenant no encontrado" });
+    const [plan, clientsUsed] = await Promise.all([
+      db.collection("plans").findOne({ _id: tenant.plan_id }),
+      db.collection("clients").countDocuments({ tenant_id: tenant._id }),
+    ]);
+    res.json({
+      tenant: { id: tenant._id, name: tenant.name },
+      status: tenant.subscription_status,
+      trialEndsAt: tenant.trial_ends_at ?? null,
+      currentPeriodEndsAt: tenant.current_period_ends_at ?? null,
+      plan: plan ? mapPlan(plan) : null,
+      usage: { clients: clientsUsed, clientLimit: plan?.limits?.clients ?? null },
+    });
+  } catch (err) {
+    console.error("[billing/license]", err);
+    res.status(500).json({ error: "No se pudo recuperar la licencia" });
+  }
+});
+
 api.post("/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: "Email y contraseña requeridos" });
@@ -569,11 +1007,13 @@ api.post("/auth/login", async (req, res) => {
     const safeUser = mapDocument(user);
     const accessToken = signAccessToken(safeUser);
     const { token: refreshToken } = await createRefreshToken(safeUser.id);
+    const license = await getLicenseForUser(user);
     res.json({
       user: safeUser,
       accessToken,
       refreshToken,
       expiresInSeconds: ACCESS_TTL_SECONDS,
+      license,
     });
   } catch (err) {
     console.error("[auth/login]", err);
@@ -591,7 +1031,8 @@ api.post("/auth/refresh", async (req, res) => {
     if (!user) return res.status(401).json({ error: "Usuario no encontrado" });
     const safeUser = mapDocument(user);
     const accessToken = signAccessToken(safeUser);
-    res.json({ accessToken, expiresInSeconds: ACCESS_TTL_SECONDS });
+    const license = await getLicenseForUser(user);
+    res.json({ accessToken, expiresInSeconds: ACCESS_TTL_SECONDS, license });
   } catch (err) {
     console.error("[auth/refresh]", err);
     res.status(500).json({ error: "No se pudo refrescar la sesión" });
@@ -641,12 +1082,12 @@ api.get("/users", authenticate, requireAdmin, async (_req, res) => {
   }
 });
 
-api.get("/clients", authenticate, async (_req, res) => {
+api.get("/clients", authenticate, requireActiveSubscription, async (req, res) => {
   try {
     const db = getDb();
     const items = await db
       .collection("clients")
-      .find({}, { projection: { password_hash: 0 } })
+      .find(tenantFilter(req), { projection: { password_hash: 0 } })
       .sort({ created_at: -1 })
       .toArray();
 
@@ -1142,13 +1583,14 @@ api.delete("/claims/:id/documents/:docId", authenticate, async (req, res) => {
   }
 });
 
-api.post("/clients", authenticate, async (req, res) => {
+api.post("/clients", authenticate, requireActiveSubscription, async (req, res) => {
   const { name, document, city, department, country, address, contacts, policies, apoderados, laboralHistorial } =
     req.body || {};
   if (!name || !document) return res.status(400).json({ error: "Nombre y documento son obligatorios" });
 
   const clientDoc = {
     _id: randomUUID(),
+    tenant_id: req.user?.tenantId ?? null,
     name,
     document,
     city: city ?? null,
@@ -1188,7 +1630,7 @@ api.post("/clients", authenticate, async (req, res) => {
   }
 });
 
-api.patch("/clients/:id", authenticate, async (req, res) => {
+api.patch("/clients/:id", authenticate, requireActiveSubscription, async (req, res) => {
   const clientId = req.params.id;
   const { name, document, city, department, country, address, contacts, apoderados, laboralHistorial } =
     req.body || {};
@@ -1228,7 +1670,7 @@ api.patch("/clients/:id", authenticate, async (req, res) => {
     const db = getDb();
     const clientIds = buildIdList(clientId);
     const updated = await db.collection("clients").findOneAndUpdate(
-      { _id: { $in: clientIds } },
+      tenantFilter(req, { _id: { $in: clientIds } }),
       { $set: update },
       { returnDocument: "after" },
     );
@@ -1245,7 +1687,7 @@ api.get("/clients/:id", authenticate, async (req, res) => {
   try {
     const db = getDb();
     const clientIds = buildIdList(clientId);
-    const clientDoc = await db.collection("clients").findOne({ _id: { $in: clientIds } });
+    const clientDoc = await db.collection("clients").findOne(tenantFilter(req, { _id: { $in: clientIds } }));
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
     res.json(mapDocument(clientDoc));
   } catch (err) {
@@ -1259,7 +1701,7 @@ api.get("/clients/:id/summary", authenticate, async (req, res) => {
   try {
     const db = getDb();
     const clientIds = buildIdList(clientId);
-    const clientDoc = await db.collection("clients").findOne({ _id: { $in: clientIds } });
+    const clientDoc = await db.collection("clients").findOne(tenantFilter(req, { _id: { $in: clientIds } }));
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
 
     const policyLinks = await db.collection("policy_clients")
@@ -1381,7 +1823,7 @@ api.get("/clients/:id/documents", authenticate, async (req, res) => {
   try {
     const db = getDb();
     const clientIds = buildIdList(clientId);
-    const clientDoc = await db.collection("clients").findOne({ _id: { $in: clientIds } });
+    const clientDoc = await db.collection("clients").findOne(tenantFilter(req, { _id: { $in: clientIds } }));
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
 
     const rows = await db
@@ -1406,7 +1848,7 @@ api.post("/clients/:id/documents", authenticate, async (req, res) => {
   try {
     const db = getDb();
     const clientIds = buildIdList(clientId);
-    const clientDoc = await db.collection("clients").findOne({ _id: { $in: clientIds } });
+    const clientDoc = await db.collection("clients").findOne(tenantFilter(req, { _id: { $in: clientIds } }));
     if (!clientDoc) return res.status(404).json({ error: "Cliente no encontrado" });
 
     const now = new Date();
@@ -1960,6 +2402,7 @@ api.post("/tasks", authenticate, async (req, res) => {
 
     const doc = {
       _id: randomUUID(),
+      tenant_id: req.user?.tenantId ?? null,
       client_id: clientExists?._id ?? null,
       title,
       due_date: due_date ? new Date(due_date) : null,
@@ -2536,9 +2979,10 @@ app.use((err, _req, res, _next) => {
 });
 
 connectToDatabase()
-  .then(() => {
+  .then(async () => {
+    await ensureBillingIndexesAndPlans();
     app.listen(PORT, "127.0.0.1", () => {
-      console.log(`[api] listening on http://127.0.0.1:${PORT}`);
+      console.log(`[api] listening on http://127.0.0.1:${PORT} for ${PUBLIC_APP_URL}`);
     });
   })
   .catch((err) => {
