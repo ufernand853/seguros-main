@@ -24,16 +24,19 @@ Proyecto prototipo visual “Gestión de seguros”
 - Blueprint de implementación completo en `IMPLEMENTATION.md`.
 - Manual de uso funcional en `docs/USER_MANUAL.md`.
 
+- Estrategia SaaS, Mercado Pago, HTTPS y convivencia de puertos en `docs/saas-deployment-strategy.md`.
+- Deploy productivo para `seguros.linsse.com` en `docs/DEPLOY_SEGUROS_LINSSE.md` con ejemplos en `deploy/nginx/` y `deploy/systemd/`.
+
 ## Servidor API (MongoDB)
 
 - Variables de entorno principales (crear un `.env`):
   - `MONGODB_URI` → cadena de conexión a MongoDB (por defecto `mongodb://localhost:27017/seguros`).
   - `MONGODB_DB` → nombre de la base de datos (por defecto `seguros`).
   - `JWT_SECRET` → secreto para firmar los tokens.
-  - `PORT` → puerto del API (por defecto 4000).
+  - `PORT` → puerto del API (por defecto 4020, reservado para no chocar con Ganadería/Stock).
   - `ACCESS_TTL_SECONDS` → segundos de vigencia del access token (por defecto 7200 = 2h).
   - `REFRESH_TTL_SECONDS` → segundos de vigencia del refresh token (por defecto 86400 = 24h).
-  - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `http://localhost:4000/api` o `/api`).
+  - `VITE_API_URL` → URL base para que el frontend hable con el API (por defecto `/api` detrás de proxy o `http://localhost:4020/api` en desarrollo directo).
   - `VITE_GANADERIA_URL` → URL pública del módulo de ganadería (ejemplo `https://apps.midominio.com/EstablecimientoGanadero`). Si no se define, se usa `/EstablecimientoGanadero` sobre el mismo origen (sin forzar `localhost` ni puerto).
 
 - Puedes usar el archivo `.env.example` incluido en el repo y copiarlo como `.env` para comenzar rápido:
@@ -43,21 +46,22 @@ Proyecto prototipo visual “Gestión de seguros”
 MONGODB_URI=mongodb://localhost:27017/seguros
 MONGODB_DB=seguros
 JWT_SECRET=dev-secret-change-me
-PORT=4000
+PORT=4020
 ACCESS_TTL_SECONDS=7200
 REFRESH_TTL_SECONDS=86400
 
 # Frontend
-VITE_API_URL=http://localhost:4000/api
+VITE_API_URL=http://localhost:4020/api
 VITE_GANADERIA_URL=https://apps.midominio.com/EstablecimientoGanadero
 ```
 - Provisionar la base de datos limpia (crea solo un usuario admin configurable por env):
   - `npm run seed:mongo`
-- Ejecutar `npm run server` para levantar el backend Node (puerto 4000). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
+- Ejecutar `npm run server` para levantar el backend Node (puerto 4020). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
+- SaaS/Mercado Pago: el backend expone `GET /api/public/plans`, `POST /api/public/register`, `POST /api/webhooks/mercadopago` y `GET /api/billing/license` para replicar el patrón relevado en Stock/Ganadería: planes, tenant, suscripción, webhook firmado e información de licencia.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.
-- Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4000/api/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta o usa `/api` para proxear al backend desde Vite.
+- Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4020/api/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta o usa `/api` para proxear al backend desde Vite.
 
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder

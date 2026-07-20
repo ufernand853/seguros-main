@@ -2,10 +2,11 @@ const DEFAULT_API_BASE = "/api";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE).replace(/\/$/, "");
 
 type LoginResponse = {
-  user: { id: string; name: string; email: string; role?: string };
+  user: { id: string; name: string; email: string; role?: string; tenant_id?: string | null };
   accessToken: string;
   refreshToken: string;
   expiresInSeconds: number;
+  license?: BillingLicense | null;
 };
 
 async function handleResponse(res: Response) {
@@ -113,7 +114,7 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
   });
 }
 
-export async function apiRefresh(refreshToken: string): Promise<{ accessToken: string; expiresInSeconds: number }> {
+export async function apiRefresh(refreshToken: string): Promise<{ accessToken: string; expiresInSeconds: number; license?: BillingLicense | null }> {
   return request("/auth/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1047,3 +1048,54 @@ export async function apiListCommandLogs(accessToken: string): Promise<{ items: 
 }
 
 export const apiConfig = { API_BASE };
+
+export type BillingPlan = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  currency: string;
+  interval: string;
+  limits: { users?: number; clients?: number; storageMb?: number };
+};
+
+export type BillingLicense = {
+  tenant: { id: string; name: string };
+  status: string;
+  trialEndsAt?: string | null;
+  currentPeriodEndsAt?: string | null;
+  plan?: BillingPlan | null;
+  usage?: { clients?: number; clientLimit?: number | null };
+};
+
+export type RegisterSaasPayload = {
+  companyName: string;
+  name: string;
+  email: string;
+  password: string;
+  planSlug: string;
+};
+
+export async function apiListPublicPlans(): Promise<{ items: BillingPlan[] }> {
+  return request("/public/plans", { method: "GET" });
+}
+
+export async function apiRegisterSaas(payload: RegisterSaasPayload): Promise<{
+  tenant: { id: string; name: string; subscriptionStatus: string };
+  user: { id: string; name: string; email: string; role: string };
+  plan: BillingPlan;
+  subscription: { id: string; status: string; provider: string; initPoint?: string | null; providerSubscriptionId?: string | null };
+}> {
+  return request("/public/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiGetBillingLicense(accessToken: string): Promise<BillingLicense> {
+  return request("/billing/license", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
