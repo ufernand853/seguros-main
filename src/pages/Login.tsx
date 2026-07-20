@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { apiLogin } from "../services/api";
 
@@ -19,7 +19,7 @@ export default function Login() {
     try {
       const response = await apiLogin(email, password);
       login(
-        { name: response.user.name, email: response.user.email, role: response.user.role },
+        { name: response.user.name, email: response.user.email, role: response.user.role, license: response.license },
         response.accessToken,
         Math.floor(response.expiresInSeconds / 60),
       );
@@ -80,6 +80,11 @@ export default function Login() {
             {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
           </button>
         </form>
+        <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+          <Link to="/registro" className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
+            Ver planes y funcionalidades
+          </Link>
+        </div>
       </div>
     </div>
   );
