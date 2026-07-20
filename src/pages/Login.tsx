@@ -83,6 +83,11 @@ export default function Login() {
             {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
           </button>
         </form>
+        <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+          <Link to="/registro" className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
+            Ver planes y funcionalidades
+          </Link>
+        </div>
       </div>
     </div>
   );
