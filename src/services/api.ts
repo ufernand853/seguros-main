@@ -1058,6 +1058,7 @@ export type BillingPlan = {
   currency: string;
   interval: string;
   limits: { users?: number; clients?: number; storageMb?: number };
+  active?: boolean;
 };
 
 export type BillingLicense = {
@@ -1079,6 +1080,23 @@ export type RegisterSaasPayload = {
 
 export async function apiListPublicPlans(): Promise<{ items: BillingPlan[] }> {
   return request("/public/plans", { method: "GET" });
+}
+
+export async function apiListAdminPlans(accessToken: string): Promise<{ items: BillingPlan[] }> {
+  return request("/admin/plans", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function apiUpdateAdminPlan(planId: string, payload: Partial<BillingPlan>, accessToken: string): Promise<{ plan: BillingPlan }> {
+  return request(`/admin/plans/${encodePathSegment(planId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function apiRegisterSaas(payload: RegisterSaasPayload): Promise<{

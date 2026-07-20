@@ -734,6 +734,7 @@ function mapPlan(plan) {
     currency: plan.currency,
     interval: plan.interval,
     limits: plan.limits ?? {},
+    active: plan.active !== false,
   };
 }
 
@@ -860,6 +861,60 @@ api.get("/public/plans", async (_req, res) => {
   } catch (err) {
     console.error("[public/plans]", err);
     res.status(500).json({ error: "No se pudieron recuperar los planes" });
+  }
+});
+
+api.get("/admin/plans", authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const db = getDb();
+    const plans = await db.collection("plans").find({}).sort({ price: 1 }).toArray();
+    res.json({ items: plans.map(mapPlan) });
+  } catch (err) {
+    console.error("[admin/plans]", err);
+    res.status(500).json({ error: "No se pudieron recuperar los planes" });
+  }
+});
+
+api.put("/admin/plans/:id", authenticate, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { name, description, price, currency, interval, limits, active } = req.body || {};
+  const normalizedPrice = Number(price);
+  if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0) {
+    return res.status(400).json({ error: "El precio del plan debe ser un número mayor o igual a cero" });
+  }
+
+  try {
+    const db = getDb();
+    const existing = await db.collection("plans").findOne({ _id: id });
+    if (!existing) return res.status(404).json({ error: "Plan no encontrado" });
+
+    const nextLimits = {
+      users: Number(limits?.users ?? existing.limits?.users ?? 0),
+      clients: Number(limits?.clients ?? existing.limits?.clients ?? 0),
+      storageMb: Number(limits?.storageMb ?? existing.limits?.storageMb ?? 0),
+    };
+
+    await db.collection("plans").updateOne(
+      { _id: id },
+      {
+        $set: {
+          name: String(name || existing.name).trim(),
+          description: String(description ?? existing.description ?? "").trim(),
+          price: normalizedPrice,
+          currency: String(currency || existing.currency || MERCADOPAGO_CURRENCY).trim().toUpperCase(),
+          interval: String(interval || existing.interval || "monthly").trim(),
+          limits: nextLimits,
+          active: typeof active === "boolean" ? active : existing.active !== false,
+          updated_at: new Date(),
+        },
+      },
+    );
+
+    const updated = await db.collection("plans").findOne({ _id: id });
+    res.json({ plan: mapPlan(updated) });
+  } catch (err) {
+    console.error("[admin/plans update]", err);
+    res.status(500).json({ error: "No se pudo actualizar el plan" });
   }
 });
 

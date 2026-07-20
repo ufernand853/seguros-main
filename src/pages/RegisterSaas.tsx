@@ -60,11 +60,26 @@ export default function RegisterSaas() {
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_420px]">
         <section className="rounded-3xl bg-slate-900 p-8 text-white shadow-2xl">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-indigo-300">SaaS Seguros</p>
-          <h1 className="mt-4 text-4xl font-bold">Alta de empresa con suscripción Mercado Pago</h1>
+          <h1 className="mt-4 text-4xl font-bold">Planes y funcionalidades para corredoras de seguros</h1>
           <p className="mt-4 text-slate-300">
-            El alta crea el tenant, el usuario administrador y la suscripción local. Si el token de Mercado Pago está
-            configurado, se redirige al checkout/preapproval del plan seleccionado.
+            Gestión de Seguros centraliza la cartera comercial, clientes, aseguradoras, pólizas, renovaciones,
+            seguimiento de gestiones y registro de siniestros en una solución SaaS con licencia por empresa.
           </p>
+
+          <div className="mt-6 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
+            {[
+              "Clientes y ficha 360° con documentos y contactos.",
+              "Agenda de renovaciones y vencimientos priorizados.",
+              "Seguimiento de gestiones con responsables y estados.",
+              "Registro de siniestros asociado a cliente y póliza.",
+              "Catálogo de aseguradoras y condiciones operativas.",
+              "Modo IA para consultas y comandos asistidos.",
+            ].map((feature) => (
+              <div key={feature} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                {feature}
+              </div>
+            ))}
+          </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {plans.map((plan) => (
