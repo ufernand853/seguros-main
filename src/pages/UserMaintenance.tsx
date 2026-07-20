@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "../auth/AuthProvider";
-import { apiDeleteUser, apiListUsers, type UserItem } from "../services/api";
+import {
+  apiDeleteUser,
+  apiListAdminPlans,
+  apiListUsers,
+  apiUpdateAdminPlan,
+  type BillingPlan,
+  type UserItem,
+} from "../services/api";
 
 const BASE_ROLES = ["Administrador", "Operaciones", "Consultas"];
 
@@ -34,6 +41,11 @@ export default function UserMaintenance() {
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<BillingPlan[]>([]);
+  const [plansError, setPlansError] = useState<string | null>(null);
+  const [plansFeedback, setPlansFeedback] = useState<string | null>(null);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
 
   const normalizeUser = useCallback((user: UserItem): UserRecord => {
     const roles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : user.role ? [user.role] : [];
@@ -70,6 +82,47 @@ export default function UserMaintenance() {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  const loadPlans = useCallback(async () => {
+    if (!token) return;
+    setIsLoadingPlans(true);
+    setPlansError(null);
+
+    try {
+      const response = await apiListAdminPlans(token);
+      setPlans(response.items);
+    } catch (err) {
+      setPlansError(err instanceof Error ? err.message : "No se pudieron cargar los planes");
+      setPlans([]);
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadPlans();
+  }, [loadPlans]);
+
+  const updatePlanField = (planId: string, updater: (plan: BillingPlan) => BillingPlan) => {
+    setPlans((prev) => prev.map((plan) => (plan.id === planId ? updater(plan) : plan)));
+  };
+
+  const handleSavePlan = async (plan: BillingPlan) => {
+    if (!token) return;
+    setSavingPlanId(plan.id);
+    setPlansError(null);
+    setPlansFeedback(null);
+
+    try {
+      const response = await apiUpdateAdminPlan(plan.id, plan, token);
+      setPlans((prev) => prev.map((item) => (item.id === plan.id ? response.plan : item)));
+      setPlansFeedback(`Plan ${response.plan.name} actualizado.`);
+    } catch (err) {
+      setPlansError(err instanceof Error ? err.message : "No se pudo guardar el plan");
+    } finally {
+      setSavingPlanId(null);
+    }
+  };
 
   const roleOptions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -235,6 +288,124 @@ export default function UserMaintenance() {
           <ResumenCard title="Roles vigentes" value={stats.totalRoles.toString()} subtitle="Catálogo de permisos" />
         </dl>
       </header>
+
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 flex flex-col gap-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">SaaS</p>
+            <h2 className="text-xl font-bold text-slate-900">Planes y precios</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Configura los precios que se muestran en el registro público y que se usan para crear suscripciones de Mercado Pago.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadPlans}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Recargar planes
+          </button>
+        </div>
+
+        {plansError && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{plansError}</div>}
+        {plansFeedback && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{plansFeedback}</div>}
+        {isLoadingPlans && <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">Cargando planes...</div>}
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          {plans.map((plan) => (
+            <div key={plan.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{plan.slug}</p>
+                  <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
+                </div>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={plan.active !== false}
+                    onChange={(event) => updatePlanField(plan.id, (current) => ({ ...current, active: event.target.checked }))}
+                  />
+                  Activo
+                </label>
+              </div>
+
+              <div className="grid gap-3">
+                <label className="text-sm font-semibold text-slate-700">
+                  Nombre
+                  <input
+                    value={plan.name}
+                    onChange={(event) => updatePlanField(plan.id, (current) => ({ ...current, name: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Descripción
+                  <textarea
+                    value={plan.description ?? ""}
+                    onChange={(event) => updatePlanField(plan.id, (current) => ({ ...current, description: event.target.value }))}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Precio
+                    <input
+                      type="number"
+                      min="0"
+                      value={plan.price}
+                      onChange={(event) => updatePlanField(plan.id, (current) => ({ ...current, price: Number(event.target.value) }))}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Moneda
+                    <input
+                      value={plan.currency}
+                      onChange={(event) => updatePlanField(plan.id, (current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    ["users", "Usuarios"],
+                    ["clients", "Clientes"],
+                    ["storageMb", "MB"],
+                  ].map(([key, label]) => (
+                    <label key={key} className="text-sm font-semibold text-slate-700">
+                      {label}
+                      <input
+                        type="number"
+                        min="0"
+                        value={Number(plan.limits?.[key as keyof BillingPlan["limits"]] ?? 0)}
+                        onChange={(event) =>
+                          updatePlanField(plan.id, (current) => ({
+                            ...current,
+                            limits: { ...current.limits, [key]: Number(event.target.value) },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSavePlan(plan)}
+                  disabled={savingPlanId === plan.id}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  {savingPlanId === plan.id ? "Guardando..." : "Guardar precio y límites"}
+                </button>
+              </div>
+            </div>
+          ))}
+          {!isLoadingPlans && plans.length === 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No hay planes configurados.</div>
+          )}
+        </div>
+      </section>
 
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-6 flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
