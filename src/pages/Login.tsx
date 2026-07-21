@@ -1,11 +1,13 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { apiLogin } from "../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+  const registrationPath = location.pathname.startsWith("/seguros") ? "/seguros/registro" : "/registro";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,15 +36,17 @@ export default function Login() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-100 px-4">
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+        <img
+          src="/linsse.svg"
+          alt="Linsse"
+          className="mb-6 h-12 w-auto"
+        />
         <h1 className="text-3xl font-bold text-center mb-2 text-slate-900">
-          Portal Gestión de Seguros
+          Portal de Gestión para Corredores de Seguros
         </h1>
         <p className="text-center text-slate-500 mb-8">
-          Usa las credenciales internas para continuar
+          Accedé a tus herramientas de cartera, pólizas y clientes
         </p>
-        <Link to="/registro" className="mb-6 block rounded-xl bg-slate-100 px-4 py-3 text-center text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
-          Crear cuenta SaaS con Mercado Pago
-        </Link>
         <form className="space-y-6" onSubmit={handleLogin}>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
@@ -84,7 +88,7 @@ export default function Login() {
           </button>
         </form>
         <div className="mt-6 border-t border-slate-100 pt-5 text-center">
-          <Link to="/registro" className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
+          <Link to={registrationPath} className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
             Ver planes y funcionalidades
           </Link>
         </div>
