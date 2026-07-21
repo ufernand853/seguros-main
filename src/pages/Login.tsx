@@ -1,11 +1,13 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { apiLogin } from "../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+  const registrationPath = location.pathname.startsWith("/seguros") ? "/seguros/registro" : "/registro";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +87,11 @@ export default function Login() {
             {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
           </button>
         </form>
+        <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+          <Link to={registrationPath} className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
+            Ver planes y funcionalidades
+          </Link>
+        </div>
       </div>
     </div>
   );
