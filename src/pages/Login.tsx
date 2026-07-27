@@ -28,11 +28,13 @@ export default function Login() {
     try {
       const response = await apiLogin(email, password);
       login(
-        { name: response.user.name, email: response.user.email, role: response.user.role, license: response.license },
+        { name: response.user.name, email: response.user.email, role: response.user.role, clientId: response.user.client_id, license: response.license },
         response.accessToken,
         Math.floor(response.expiresInSeconds / 60),
       );
-      navigate("/dashboard", { replace: true });
+      navigate(response.user.role === "cliente" && response.user.client_id
+        ? `/clientes/${response.user.client_id}`
+        : "/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
