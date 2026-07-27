@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/server.js",
-    "seed:mongo": "node server/mongo/seed.js"
+    "seed:mongo": "node server/mongo/seed.js",
+    "clients:trim-demo": "node server/mongo/trim-demo-tenants.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

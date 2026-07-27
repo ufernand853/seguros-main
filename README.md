@@ -58,6 +58,31 @@ VITE_GANADERIA_URL=https://apps.midominio.com/EstablecimientoGanadero
   - `npm run seed:mongo`
 - Ejecutar `npm run server` para levantar el backend Node (puerto 4020). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
 - SaaS/Mercado Pago: el backend expone `GET /api/public/plans`, `POST /api/public/register`, `POST /api/webhooks/mercadopago` y `GET /api/billing/license` para replicar el patrón relevado en Stock/Ganadería: planes, tenant, suscripción, webhook firmado e información de licencia.
+
+### Reducir los clientes del tenant demo
+
+El comando `npm run clients:trim-demo` conserva los cinco clientes más recientes del
+tenant asociado a `DEMO_USER_EMAIL`, respalda en EJSON los clientes restantes y sus
+datos relacionados, y prepara el vaciado de los datos operativos de los demás tenants.
+Por seguridad, sin argumentos solo genera el respaldo y muestra una vista previa:
+
+```bash
+DEMO_USER_EMAIL=demo@seguros.com npm run clients:trim-demo
+```
+
+Después de revisar el archivo creado en `CLIENT_BACKUP_DIR`, se aplican los cambios de
+forma explícita. El respaldo también incluye todo lo que se quitará de los otros tenants:
+
+```bash
+DEMO_USER_EMAIL=demo@seguros.com npm run clients:trim-demo -- --apply
+```
+
+El proceso no elimina usuarios, tenants, planes ni suscripciones. Conserva las pólizas
+compartidas por alguno de los cinco clientes retenidos y elimina las pólizas que quedan
+huérfanas al retirar los clientes excedentes. Si el usuario demo es un usuario interno
+antiguo sin `tenant_id` (por ejemplo, el administrador inicial), el comando toma como
+datos demo los clientes que tampoco tengan `tenant_id`; los tenants SaaS se consideran
+entonces tenants diferentes y sus datos operativos se vacían al usar `--apply`.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.
