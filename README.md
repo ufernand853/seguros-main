@@ -79,7 +79,10 @@ DEMO_USER_EMAIL=demo@seguros.com npm run clients:trim-demo -- --apply
 
 El proceso no elimina usuarios, tenants, planes ni suscripciones. Conserva las pólizas
 compartidas por alguno de los cinco clientes retenidos y elimina las pólizas que quedan
-huérfanas al retirar los clientes excedentes.
+huérfanas al retirar los clientes excedentes. Si el usuario demo es un usuario interno
+antiguo sin `tenant_id` (por ejemplo, el administrador inicial), el comando toma como
+datos demo los clientes que tampoco tengan `tenant_id`; los tenants SaaS se consideran
+entonces tenants diferentes y sus datos operativos se vacían al usar `--apply`.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.

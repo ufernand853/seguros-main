@@ -99,12 +99,20 @@ async function main() {
   const db = await connectToDatabase();
   const demoUser = await db.collection("users").findOne({ email: demoEmail });
   if (!demoUser) throw new Error(`No existe el usuario demo ${demoEmail}.`);
-  if (!demoUser.tenant_id) throw new Error(`El usuario ${demoEmail} no tiene tenant_id.`);
 
-  const demoTenantId = demoUser.tenant_id;
+  // Los usuarios internos creados antes de incorporar SaaS no tienen tenant_id.
+  // En ese caso, sus clientes históricos también quedaron sin tenant_id y son el
+  // conjunto demo que debemos conservar.
+  const demoTenantId = demoUser.tenant_id ?? null;
+  if (demoTenantId === null) {
+    console.warn(`[clients:trim-demo] ${demoEmail} no tiene tenant_id; se usarán los clientes sin tenant_id.`);
+  }
+  const demoTenantFilter = demoTenantId === null
+    ? { $or: [{ tenant_id: null }, { tenant_id: { $exists: false } }] }
+    : { tenant_id: demoTenantId };
   const demoClients = await db
     .collection("clients")
-    .find({ tenant_id: demoTenantId })
+    .find(demoTenantFilter)
     .sort({ created_at: -1, _id: 1 })
     .toArray();
   const keptClients = demoClients.slice(0, keepCount);
@@ -112,7 +120,9 @@ async function main() {
   const keptClientIds = keptClients.map((row) => row._id);
   const removedClientIds = removedClients.map((row) => row._id);
 
-  const otherTenantIds = await db.collection("tenants").distinct("_id", { _id: { $ne: demoTenantId } });
+  const otherTenantIds = demoTenantId === null
+    ? await db.collection("tenants").distinct("_id")
+    : await db.collection("tenants").distinct("_id", { _id: { $ne: demoTenantId } });
   const [demoBackup, otherTenantsBackup] = await Promise.all([
     documentsForClientIds(db, removedClientIds),
     documentsForTenants(db, otherTenantIds),
