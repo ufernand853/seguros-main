@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "server": "node server/server.js",
     "seed:mongo": "node server/mongo/seed.js",
-    "clients:trim-demo": "node server/mongo/trim-demo-tenants.js"
+    "clients:trim-demo": "node server/mongo/trim-demo-tenants.js",
+    "client-demo:provision": "node server/mongo/provision-client-demo.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

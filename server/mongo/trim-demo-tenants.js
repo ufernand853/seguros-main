@@ -32,6 +32,27 @@ function timestamp() {
   return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
 }
 
+function uniqueValues(values) {
+  const byEjson = new Map();
+  for (const value of values) {
+    if (value !== null && value !== undefined) byEjson.set(BSON.EJSON.stringify(value), value);
+  }
+  return [...byEjson.values()];
+}
+
+function countDocumentsByCollection(data) {
+  return Object.fromEntries(Object.entries(data).map(([collection, rows]) => [collection, rows.length]));
+}
+
+async function discoverOtherTenantIds(db, demoTenantId) {
+  const tenantIds = await db.collection("tenants").distinct("_id");
+  for (const collection of operationalCollections) {
+    tenantIds.push(...await db.collection(collection).distinct("tenant_id"));
+  }
+  const demoKey = demoTenantId === null ? null : BSON.EJSON.stringify(demoTenantId);
+  return uniqueValues(tenantIds).filter((tenantId) => BSON.EJSON.stringify(tenantId) !== demoKey);
+}
+
 async function documentsForClientIds(db, clientIds) {
   if (!clientIds.length) return Object.fromEntries(operationalCollections.map((name) => [name, []]));
 
@@ -120,9 +141,9 @@ async function main() {
   const keptClientIds = keptClients.map((row) => row._id);
   const removedClientIds = removedClients.map((row) => row._id);
 
-  const otherTenantIds = demoTenantId === null
-    ? await db.collection("tenants").distinct("_id")
-    : await db.collection("tenants").distinct("_id", { _id: { $ne: demoTenantId } });
+  // No dependemos solamente de `tenants`: también detectamos tenant_id huérfanos
+  // presentes en colecciones operativas para garantizar que no quede información.
+  const otherTenantIds = await discoverOtherTenantIds(db, demoTenantId);
   const [demoBackup, otherTenantsBackup] = await Promise.all([
     documentsForClientIds(db, removedClientIds),
     documentsForTenants(db, otherTenantIds),
@@ -153,6 +174,16 @@ async function main() {
     }
   }
 
+  const remainingOtherTenantData = applyChanges
+    ? await documentsForTenants(db, otherTenantIds)
+    : null;
+  const remainingOtherTenantCounts = remainingOtherTenantData
+    ? countDocumentsByCollection(remainingOtherTenantData)
+    : null;
+  if (remainingOtherTenantCounts && Object.values(remainingOtherTenantCounts).some((count) => count !== 0)) {
+    throw new Error(`Quedaron datos de otros tenants: ${JSON.stringify(remainingOtherTenantCounts)}`);
+  }
+
   console.log(JSON.stringify({
     mode: applyChanges ? "applied" : "dry-run",
     backup: backupPath,
@@ -160,7 +191,10 @@ async function main() {
     demoClientsBefore: demoClients.length,
     demoClientsKept: keptClients.length,
     demoClientsRemoved: removedClients.length,
+    otherTenantsFound: otherTenantIds.length,
     otherTenantsCleared: applyChanges ? otherTenantIds.length : 0,
+    otherTenantRecordsBefore: countDocumentsByCollection(otherTenantsBackup),
+    otherTenantRecordsAfter: remainingOtherTenantCounts,
   }, null, 2));
   if (!applyChanges) console.log(`Vista previa solamente. Revisá el respaldo y repetí con ${APPLY_FLAG}.`);
 }

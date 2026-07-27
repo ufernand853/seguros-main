@@ -82,7 +82,25 @@ compartidas por alguno de los cinco clientes retenidos y elimina las pólizas qu
 huérfanas al retirar los clientes excedentes. Si el usuario demo es un usuario interno
 antiguo sin `tenant_id` (por ejemplo, el administrador inicial), el comando toma como
 datos demo los clientes que tampoco tengan `tenant_id`; los tenants SaaS se consideran
-entonces tenants diferentes y sus datos operativos se vacían al usar `--apply`.
+entonces tenants diferentes y sus datos operativos se vacían al usar `--apply`. El
+resumen final muestra registros por colección antes y después; la ejecución falla si la
+verificación posterior detecta que quedó algún dato de otro tenant. También se detectan
+identificadores de tenant huérfanos presentes en datos operativos aunque ya no exista su
+documento en la colección `tenants`.
+
+### Usuario demo con vista de cliente
+
+Para crear o actualizar `demo@linsse.com` como usuario de portal asociado a un único
+cliente, ejecutá el siguiente comando. Si no indicás `CLIENT_DEMO_CLIENT_ID`, se utiliza
+el cliente demo más reciente:
+
+```bash
+CLIENT_DEMO_PASSWORD='una-clave-segura' npm run client-demo:provision
+```
+
+El rol `cliente` entra directamente a su ficha y no ve el menú operativo. Para elegir
+otro cliente, agregá `CLIENT_DEMO_CLIENT_ID=<id>` al comando. El proceso es idempotente:
+si el correo ya existe, actualiza su asociación y contraseña.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.
