@@ -29,7 +29,8 @@ const ROLE_LABELS: Record<string, string> = {
 export default function ClientDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isClientPortal = user?.role === "cliente";
 
   const [client, setClient] = useState<ClientSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,7 +80,7 @@ export default function ClientDetail() {
             {client?.document ?? "Documento no disponible"} · {client?.city ?? "Ciudad sin especificar"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {!isClientPortal && <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => navigate("/pipeline")}
@@ -115,7 +116,7 @@ export default function ClientDetail() {
           >
             Volver al listado
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
