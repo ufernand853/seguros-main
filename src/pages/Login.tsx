@@ -4,11 +4,68 @@ import { useAuth } from "../auth/AuthProvider";
 import { apiLogin } from "../services/api";
 
 const featureHighlights = [
-  "CRM de clientes y seguimiento de oportunidades",
-  "Gestión de pólizas, renovaciones y vencimientos",
-  "Control de producción por productor y compañía",
-  "Tableros para priorizar tareas y reclamos",
+  "Cartera 360°",
+  "Renovaciones",
+  "Gestiones e IA",
 ];
+
+const previewModules = [
+  { eyebrow: "Cartera", title: "Clientes", accent: "from-blue-500 to-cyan-400", icon: "CL" },
+  { eyebrow: "Catálogo", title: "Aseguradoras", accent: "from-cyan-500 to-indigo-500", icon: "AS" },
+  { eyebrow: "Operación", title: "Gestiones", accent: "from-rose-500 to-orange-500", icon: "GE" },
+  { eyebrow: "Vencimientos", title: "Renovaciones", accent: "from-amber-400 to-orange-500", icon: "RE" },
+  { eyebrow: "Asistente", title: "Modo IA", accent: "from-violet-500 to-indigo-500", icon: "IA" },
+  { eyebrow: "Siniestros", title: "Registro", accent: "from-slate-700 to-slate-500", icon: "SI" },
+];
+
+function ProductPreview() {
+  return (
+    <div className="relative mt-8" aria-label="Vista previa del panel operativo de Linsse">
+      <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-r from-sky-400/20 via-indigo-400/10 to-violet-400/20 blur-2xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-white/20 bg-slate-100 shadow-2xl shadow-sky-950/40">
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-3">
+          <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          <div className="ml-2 h-2 w-28 rounded-full bg-slate-200" />
+          <span className="ml-auto rounded-full bg-indigo-50 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-indigo-600">Panel operativo</span>
+        </div>
+        <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-800 px-5 py-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[7px] font-bold uppercase tracking-[0.3em] text-cyan-300">Gestión de seguros</p>
+              <p className="mt-1 text-sm font-bold text-white">Toda tu operación, en un solo lugar</p>
+            </div>
+            <div className="hidden rounded-lg border border-white/10 bg-white/10 px-3 py-2 sm:block">
+              <div className="h-1.5 w-12 rounded-full bg-white/40" />
+              <div className="mt-1.5 h-1.5 w-8 rounded-full bg-white/20" />
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3">
+          {previewModules.map((module) => (
+            <div key={module.title} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${module.accent}`} />
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[6px] font-bold uppercase tracking-[0.22em] text-slate-400">{module.eyebrow}</p>
+                  <p className="mt-1 text-[10px] font-bold text-slate-800">{module.title}</p>
+                </div>
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[8px] font-black text-slate-600">{module.icon}</span>
+              </div>
+              <div className="mt-4 h-1.5 w-3/4 rounded-full bg-slate-100" />
+              <div className="mt-1.5 h-1.5 w-1/2 rounded-full bg-slate-100" />
+            </div>
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-100 via-slate-100/60 to-transparent" />
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/80 bg-white/90 px-4 py-2 text-[9px] font-bold text-slate-800 shadow-lg backdrop-blur">
+          Una visión clara para decidir mejor
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -28,11 +85,13 @@ export default function Login() {
     try {
       const response = await apiLogin(email, password);
       login(
-        { name: response.user.name, email: response.user.email, role: response.user.role, license: response.license },
+        { name: response.user.name, email: response.user.email, role: response.user.role, clientId: response.user.client_id, license: response.license },
         response.accessToken,
         Math.floor(response.expiresInSeconds / 60),
       );
-      navigate("/dashboard", { replace: true });
+      navigate(response.user.role === "cliente" && response.user.client_id
+        ? `/clientes/${response.user.client_id}`
+        : "/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
@@ -108,40 +167,26 @@ export default function Login() {
             <div className="absolute bottom-0 left-0 h-52 w-52 rounded-full bg-indigo-500/20 blur-3xl" />
             <div className="relative">
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-300">
-                Plataforma comercial
+                La plataforma para corredores
               </p>
               <h2 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">
-                Todo lo que un corredor necesita para vender más y gestionar mejor.
+                Convertí la gestión diaria en una ventaja comercial.
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-300">
-                Centralizá la operación diaria, acompañá cada renovación y mantené una vista clara de tu cartera desde un único lugar.
+                Clientes, pólizas, renovaciones, siniestros y seguimiento comercial conectados en una experiencia simple.
               </p>
 
-              <div className="mt-8 grid gap-4">
+              <div className="mt-6 flex flex-wrap gap-2">
                 {featureHighlights.map((feature) => (
-                  <div key={feature} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                    <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-300 text-sm font-bold text-slate-950">
+                  <div key={feature} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 backdrop-blur">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-300 text-[10px] font-bold text-slate-950">
                       ✓
                     </span>
-                    <p className="text-sm font-medium leading-6 text-slate-100">{feature}</p>
+                    <p className="text-xs font-semibold text-slate-100">{feature}</p>
                   </div>
                 ))}
               </div>
-
-              <div className="mt-8 grid gap-4 rounded-2xl bg-white p-5 text-slate-950 sm:grid-cols-3">
-                <div>
-                  <p className="text-2xl font-bold">360°</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Vista cliente</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">24/7</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Acceso web</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">IA</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Asistencia operativa</p>
-                </div>
-              </div>
+              <ProductPreview />
             </div>
           </div>
         </aside>
