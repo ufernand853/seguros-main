@@ -2,7 +2,7 @@ const DEFAULT_API_BASE = "/api";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE).replace(/\/$/, "");
 
 type LoginResponse = {
-  user: { id: string; name: string; email: string; role?: string; tenant_id?: string | null };
+  user: { id: string; name: string; email: string; role?: string; tenant_id?: string | null; client_id?: string | null };
   accessToken: string;
   refreshToken: string;
   expiresInSeconds: number;

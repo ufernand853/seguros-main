@@ -58,6 +58,49 @@ VITE_GANADERIA_URL=https://apps.midominio.com/EstablecimientoGanadero
   - `npm run seed:mongo`
 - Ejecutar `npm run server` para levantar el backend Node (puerto 4020). Endpoints disponibles: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/clients`, `/clients/:id/summary`, `/pipeline`, `/tasks`, `/renewals`.
 - SaaS/Mercado Pago: el backend expone `GET /api/public/plans`, `POST /api/public/register`, `POST /api/webhooks/mercadopago` y `GET /api/billing/license` para replicar el patrón relevado en Stock/Ganadería: planes, tenant, suscripción, webhook firmado e información de licencia.
+
+### Reducir los clientes del tenant demo
+
+El comando `npm run clients:trim-demo` conserva los cinco clientes más recientes del
+tenant asociado a `DEMO_USER_EMAIL`, respalda en EJSON los clientes restantes y sus
+datos relacionados, y prepara el vaciado de los datos operativos de los demás tenants.
+Por seguridad, sin argumentos solo genera el respaldo y muestra una vista previa:
+
+```bash
+DEMO_USER_EMAIL=demo@seguros.com npm run clients:trim-demo
+```
+
+Después de revisar el archivo creado en `CLIENT_BACKUP_DIR`, se aplican los cambios de
+forma explícita. El respaldo también incluye todo lo que se quitará de los otros tenants:
+
+```bash
+DEMO_USER_EMAIL=demo@seguros.com npm run clients:trim-demo -- --apply
+```
+
+El proceso no elimina usuarios, tenants, planes ni suscripciones. Conserva las pólizas
+compartidas por alguno de los cinco clientes retenidos y elimina las pólizas que quedan
+huérfanas al retirar los clientes excedentes. Si el usuario demo es un usuario interno
+antiguo sin `tenant_id` (por ejemplo, el administrador inicial), el comando toma como
+datos demo los clientes que tampoco tengan `tenant_id`; los tenants SaaS se consideran
+entonces tenants diferentes y sus datos operativos se vacían al usar `--apply`. El
+resumen final muestra registros por colección antes y después; la ejecución falla si la
+verificación posterior detecta que quedó algún dato de otro tenant. También se detectan
+identificadores de tenant huérfanos presentes en datos operativos aunque ya no exista su
+documento en la colección `tenants`.
+
+### Usuario demo con vista de cliente
+
+Para crear o actualizar `demo@linsse.com` como usuario de portal asociado a un único
+cliente, ejecutá el siguiente comando. Si no indicás `CLIENT_DEMO_CLIENT_ID`, se utiliza
+el cliente demo más reciente:
+
+```bash
+CLIENT_DEMO_PASSWORD='una-clave-segura' npm run client-demo:provision
+```
+
+El rol `cliente` entra directamente a su ficha y no ve el menú operativo. Para elegir
+otro cliente, agregá `CLIENT_DEMO_CLIENT_ID=<id>` al comando. El proceso es idempotente:
+si el correo ya existe, actualiza su asociación y contraseña.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.

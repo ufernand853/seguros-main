@@ -69,7 +69,7 @@ function verifyPassword(password, stored) {
 }
 
 function signAccessToken(user) {
-  return jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role, tenantId: user.tenant_id ?? null }, JWT_SECRET, {
+  return jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role, tenantId: user.tenant_id ?? null, clientId: user.client_id ?? null }, JWT_SECRET, {
     expiresIn: ACCESS_TTL_SECONDS,
   });
 }
@@ -306,7 +306,7 @@ async function getUserByEmail(email) {
   const db = getDb();
   return db.collection("users").findOne(
     { email: email.toLowerCase() },
-    { projection: { _id: 1, name: 1, email: 1, password_hash: 1, role: 1, tenant_id: 1 } }
+    { projection: { _id: 1, name: 1, email: 1, password_hash: 1, role: 1, tenant_id: 1, client_id: 1 } }
   );
 }
 
@@ -345,7 +345,7 @@ async function ensureBootstrapAdminUser() {
 
 async function getUserById(id) {
   const db = getDb();
-  return db.collection("users").findOne({ _id: String(id) }, { projection: { _id: 1, name: 1, email: 1, role: 1, tenant_id: 1 } });
+  return db.collection("users").findOne({ _id: String(id) }, { projection: { _id: 1, name: 1, email: 1, role: 1, tenant_id: 1, client_id: 1 } });
 }
 
 async function getLicenseForUser(user) {
@@ -389,6 +389,10 @@ async function requireActiveSubscription(req, res, next) {
 }
 
 function tenantFilter(req, base = {}) {
+  if (req.user?.role === "cliente") {
+    if (!req.user.clientId) return { ...base, _id: { $in: [] } };
+    return { ...base, _id: { $in: buildIdList(req.user.clientId) } };
+  }
   if (!req.user?.tenantId) return base;
   return { ...base, tenant_id: req.user.tenantId };
 }
@@ -464,6 +468,9 @@ async function authenticate(req, res, next) {
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload;
+    if (payload.role === "cliente" && (req.method !== "GET" || !req.path.startsWith("/clients"))) {
+      return res.status(403).json({ error: "El portal cliente solo permite consultar su propia información" });
+    }
     return next();
   } catch (err) {
     return res.status(401).json({ error: "Token inválido" });

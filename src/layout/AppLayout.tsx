@@ -21,6 +21,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const helpContent = useHelpContent();
   const sectionTitle = getSectionTitle(location.pathname);
   const license = user?.license;
+  const isClientPortal = user?.role === "cliente";
 
   useEffect(() => {
     setIsHelpOpen(false);
@@ -34,7 +35,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
-                onClick={() => navigate("/dashboard")}
+                onClick={() => navigate(isClientPortal && user?.clientId ? `/clientes/${user.clientId}` : "/dashboard")}
                 className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-900"
               >
                 Seguros
@@ -73,7 +74,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav className="flex gap-2 overflow-x-auto pb-1">
+          {!isClientPortal && <nav className="flex gap-2 overflow-x-auto pb-1">
             {NAV_ITEMS.map((item) => {
               const active = location.pathname.startsWith(item.path.split("/").slice(0, 2).join("/"));
               return (
@@ -89,7 +90,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </button>
               );
             })}
-          </nav>
+          </nav>}
         </div>
       </header>
 
