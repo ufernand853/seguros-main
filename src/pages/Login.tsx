@@ -100,19 +100,23 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-sky-100 px-4 py-8 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-3xl bg-white p-8 shadow-2xl lg:p-10">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-blue-950 via-blue-800 to-cyan-600 px-4 py-8 lg:px-8">
+      <div className="absolute -left-32 top-1/3 h-96 w-96 rounded-full bg-sky-400/20 blur-3xl" />
+      <div className="absolute -right-20 -top-24 h-[32rem] w-[32rem] rounded-full bg-indigo-500/30 blur-3xl" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <div className="relative mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[0.82fr_1.18fr]">
+        <section className="rounded-3xl border border-white/70 bg-white/95 p-8 shadow-2xl shadow-blue-950/30 backdrop-blur lg:p-10">
           <img
             src="/linsse.svg"
             alt="Linsse"
             className="mb-7 h-12 w-auto"
           />
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-blue-600">Tu gestión empieza acá</p>
           <h1 className="text-3xl font-bold leading-tight text-slate-950 sm:text-4xl">
-            Portal de Gestión para Corredores de Seguros
+            Hacé crecer tu cartera con una gestión más inteligente
           </h1>
           <p className="mt-3 text-base leading-7 text-slate-500">
-            Accedé a tus herramientas de cartera, pólizas y clientes
+            Ingresá y convertí cada dato de tu operación en seguimiento, servicio y nuevas oportunidades.
           </p>
           <form className="mt-8 space-y-6" onSubmit={handleLogin}>
             <div>
@@ -149,31 +153,41 @@ export default function Login() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-xl bg-indigo-600 py-3 font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-cyan-600 py-3 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-800 hover:to-cyan-700 disabled:opacity-60"
             >
               {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
             </button>
           </form>
-          <div className="mt-6 border-t border-slate-100 pt-5 text-center">
-            <Link to={registrationPath} className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
-              Ver planes y funcionalidades
-            </Link>
+          <div className="mt-6 border-t border-slate-100 pt-5">
+            <div className="mb-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-medium text-slate-500">
+              <span>✓ Acceso web</span>
+              <span>✓ Información centralizada</span>
+              <span>✓ Decisiones en tiempo real</span>
+            </div>
+            <div className="text-center">
+              <Link to={registrationPath} className="text-sm font-bold text-blue-700 hover:text-blue-900">
+                Descubrí planes y todo lo que Linsse puede hacer por tu negocio →
+              </Link>
+            </div>
           </div>
         </section>
 
-        <aside className="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-2xl">
+        <aside className="overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-blue-950/95 via-blue-900/95 to-indigo-900/95 text-white shadow-2xl shadow-blue-950/40 backdrop-blur">
           <div className="relative p-8 lg:p-10">
             <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-sky-400/20 blur-3xl" />
             <div className="absolute bottom-0 left-0 h-52 w-52 rounded-full bg-indigo-500/20 blur-3xl" />
             <div className="relative">
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-300">
-                La plataforma para corredores
+                La plataforma para corredores de seguros
               </p>
               <h2 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">
-                Convertí la gestión diaria en una ventaja comercial.
+                Más control. Más cercanía. Más oportunidades para crecer.
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-300">
-                Clientes, pólizas, renovaciones, siniestros y seguimiento comercial conectados en una experiencia simple.
+                Linsse integra clientes, pólizas, renovaciones, siniestros y seguimiento comercial para que tu equipo trabaje mejor y ningún negocio quede sin atender.
+              </p>
+              <p className="mt-3 text-sm font-medium leading-6 text-sky-100">
+                Una visión completa de la cartera para anticiparte, brindar un servicio diferencial y transformar cada contacto en valor.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
