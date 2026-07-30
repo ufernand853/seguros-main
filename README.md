@@ -105,6 +105,9 @@ existe, corrige su nombre y rol, elimina asociaciones anteriores y actualiza la 
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.
 - Si ves `ERR_CONNECTION_REFUSED` hacia `http://localhost:4020/api/auth/login`, confirma que el backend esté corriendo (`npm run server`) y que `VITE_API_URL` apunte a la URL correcta o usa `/api` para proxear al backend desde Vite.
+- Si Nginx responde `502`, el frontend está publicado pero el API no está escuchando en
+  `127.0.0.1:4020`. Después de actualizar el código, reiniciá `seguros-api` y comprobá
+  `curl -fsS http://127.0.0.1:4020/api/health` antes de probar nuevamente el login.
 
 - Estado actual:
   - Login → Dashboard con tiles → cada tile abre Placeholder

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { apiDemoLogin, apiLogin } from "../services/api";
@@ -78,6 +78,10 @@ export default function Login() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [isDemoSubmitting, setDemoSubmitting] = useState(false);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, []);
+
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -119,16 +123,16 @@ export default function Login() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-blue-950 via-blue-800 to-cyan-600 px-4 py-8 lg:px-8">
+    <div className="relative min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-950 via-blue-800 to-cyan-600 px-4 py-4 sm:py-6 lg:px-8">
       <div className="absolute -left-32 top-1/3 h-96 w-96 rounded-full bg-sky-400/20 blur-3xl" />
       <div className="absolute -right-20 -top-24 h-[32rem] w-[32rem] rounded-full bg-indigo-500/30 blur-3xl" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:28px_28px]" />
-      <div className="relative mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-7xl items-center gap-8 lg:grid-cols-[0.82fr_1.18fr]">
-        <section className="rounded-3xl border border-white/70 bg-white/95 p-8 shadow-2xl shadow-blue-950/30 backdrop-blur lg:p-10">
+      <div className="relative mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-7xl items-start gap-6 lg:grid-cols-[0.82fr_1.18fr] [@media(min-height:800px)]:items-center">
+        <section className="rounded-3xl border border-white/70 bg-white/95 p-6 shadow-2xl shadow-blue-950/30 backdrop-blur sm:p-8 lg:p-9">
           <img
             src="/linsse.svg"
             alt="Linsse"
-            className="mb-7 h-12 w-auto"
+            className="mb-5 h-11 w-auto"
           />
           <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-blue-600">Tu gestión empieza acá</p>
           <h1 className="text-3xl font-bold leading-tight text-slate-950 sm:text-4xl">
@@ -137,7 +141,7 @@ export default function Login() {
           <p className="mt-3 text-base leading-7 text-slate-500">
             Ingresá y convertí cada dato de tu operación en seguimiento, servicio y nuevas oportunidades.
           </p>
-          <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+          <form className="mt-6 space-y-4" onSubmit={handleLogin}>
             <div>
               <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
                 Correo corporativo

@@ -24,8 +24,12 @@ async function handleResponse(res: Response) {
   const isHtml = text.trimStart().startsWith("<");
 
   if (!res.ok) {
+    const isGatewayUnavailable = [502, 503, 504].includes(res.status);
     const message =
       data?.error ??
+      (isGatewayUnavailable
+        ? "El servicio está reiniciándose o temporalmente no está disponible. Esperá unos segundos y volvé a intentar."
+        : null) ??
       (!text
         ? `Error ${res.status}: ${res.statusText || "Error inesperado"}`
         : isHtml
