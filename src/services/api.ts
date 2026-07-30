@@ -2,7 +2,7 @@ const DEFAULT_API_BASE = "/api";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE).replace(/\/$/, "");
 
 type LoginResponse = {
-  user: { id: string; name: string; email: string; role?: string; tenant_id?: string | null };
+  user: { id: string; name: string; email: string; role?: string; tenant_id?: string | null; client_id?: string | null };
   accessToken: string;
   refreshToken: string;
   expiresInSeconds: number;
@@ -24,8 +24,12 @@ async function handleResponse(res: Response) {
   const isHtml = text.trimStart().startsWith("<");
 
   if (!res.ok) {
+    const isGatewayUnavailable = [502, 503, 504].includes(res.status);
     const message =
       data?.error ??
+      (isGatewayUnavailable
+        ? "El servicio está reiniciándose o temporalmente no está disponible. Esperá unos segundos y volvé a intentar."
+        : null) ??
       (!text
         ? `Error ${res.status}: ${res.statusText || "Error inesperado"}`
         : isHtml
@@ -112,6 +116,10 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function apiDemoLogin(): Promise<LoginResponse> {
+  return request("/auth/demo", { method: "POST" });
 }
 
 export async function apiRefresh(refreshToken: string): Promise<{ accessToken: string; expiresInSeconds: number; license?: BillingLicense | null }> {
