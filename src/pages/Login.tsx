@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { apiLogin } from "../services/api";
+import { apiDemoLogin, apiLogin } from "../services/api";
 
 const featureHighlights = [
   "Cartera 360°",
@@ -76,6 +76,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
+  const [isDemoSubmitting, setDemoSubmitting] = useState(false);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,6 +97,24 @@ export default function Login() {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setError(null);
+    setDemoSubmitting(true);
+    try {
+      const response = await apiDemoLogin();
+      login(
+        { name: response.user.name, email: response.user.email, role: response.user.role, license: response.license },
+        response.accessToken,
+        Math.floor(response.expiresInSeconds / 60),
+      );
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo iniciar el modo demo");
+    } finally {
+      setDemoSubmitting(false);
     }
   };
 
@@ -152,12 +171,29 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isDemoSubmitting}
               className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-cyan-600 py-3 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-800 hover:to-cyan-700 disabled:opacity-60"
             >
               {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
             </button>
           </form>
+          <div className="my-5 flex items-center gap-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">o conocé la plataforma</span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            disabled={isSubmitting || isDemoSubmitting}
+            className="group w-full rounded-xl border-2 border-blue-600 bg-blue-50 px-4 py-3.5 text-sm font-bold text-blue-800 transition hover:bg-blue-100 disabled:opacity-60"
+          >
+            <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-700 text-xs text-white transition group-hover:scale-110">▶</span>
+            {isDemoSubmitting ? "Preparando la demo..." : "Entrar en modo demo"}
+          </button>
+          <p className="mt-2 text-center text-xs leading-5 text-slate-500">
+            Recorré el panel general y todas sus funcionalidades con información demostrativa.
+          </p>
           <div className="mt-6 border-t border-slate-100 pt-5">
             <div className="mb-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-medium text-slate-500">
               <span>✓ Acceso web</span>

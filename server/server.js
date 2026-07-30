@@ -32,6 +32,8 @@ const SEED_ADMIN_NAME = process.env.SEED_ADMIN_NAME || "Administrador";
 const SEED_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || process.env.ADMIN_USERNAME || "admin@seguros.local";
 const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || "Cambiar123!";
 const OPENAI_MODEL_DEFAULT = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const DEMO_LOGIN_ENABLED = String(process.env.DEMO_LOGIN_ENABLED || "true").toLowerCase() === "true";
+const CLIENT_DEMO_EMAIL = (process.env.CLIENT_DEMO_EMAIL || "demo@linsse.com").trim().toLowerCase();
 
 const app = express();
 app.set("trust proxy", TRUST_PROXY);
@@ -1098,11 +1100,22 @@ api.post("/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: "Email y contraseña requeridos" });
   try {
-    const user = await getUserByEmail(email);
+    let user = await getUserByEmail(email);
     if (!user || !verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: "Credenciales inválidas" });
     }
-    const safeUser = mapDocument(user);
+    if (String(user.email).toLowerCase() === CLIENT_DEMO_EMAIL) {
+      user = await getDb().collection("users").findOneAndUpdate(
+        { _id: user._id },
+        {
+          $set: { name: "Usuario Demo", role: "ejecutivo", status: "Activo", updated_at: new Date() },
+          $unset: { client_id: "", tenant_id: "" },
+        },
+        { returnDocument: "after" },
+      );
+    }
+    const { password_hash: _passwordHash, ...publicUser } = user;
+    const safeUser = mapDocument(publicUser);
     const accessToken = signAccessToken(safeUser);
     const { token: refreshToken } = await createRefreshToken(safeUser.id);
     const license = await getLicenseForUser(user);
@@ -1116,6 +1129,32 @@ api.post("/auth/login", async (req, res) => {
   } catch (err) {
     console.error("[auth/login]", err);
     res.status(500).json({ error: "No se pudo iniciar sesión" });
+  }
+});
+
+api.post("/auth/demo", async (_req, res) => {
+  if (!DEMO_LOGIN_ENABLED) return res.status(404).json({ error: "El modo demo no está habilitado" });
+  try {
+    const db = getDb();
+    const user = await db.collection("users").findOneAndUpdate(
+      { email: CLIENT_DEMO_EMAIL },
+      {
+        $set: { name: "Usuario Demo", role: "ejecutivo", status: "Activo", updated_at: new Date() },
+        $unset: { client_id: "", tenant_id: "" },
+      },
+      { returnDocument: "after" },
+    );
+    if (!user) return res.status(404).json({ error: "El usuario demo todavía no fue provisionado" });
+
+    await db.collection("refresh_tokens").deleteMany({ user_id: String(user._id) });
+    const { password_hash: _passwordHash, ...publicUser } = user;
+    const safeUser = mapDocument(publicUser);
+    const accessToken = signAccessToken(safeUser);
+    const { token: refreshToken } = await createRefreshToken(safeUser.id);
+    res.json({ user: safeUser, accessToken, refreshToken, expiresInSeconds: ACCESS_TTL_SECONDS, license: null });
+  } catch (err) {
+    console.error("[auth/demo]", err);
+    res.status(500).json({ error: "No se pudo iniciar el modo demo" });
   }
 });
 

@@ -114,6 +114,10 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
   });
 }
 
+export async function apiDemoLogin(): Promise<LoginResponse> {
+  return request("/auth/demo", { method: "POST" });
+}
+
 export async function apiRefresh(refreshToken: string): Promise<{ accessToken: string; expiresInSeconds: number; license?: BillingLicense | null }> {
   return request("/auth/refresh", {
     method: "POST",

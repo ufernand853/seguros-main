@@ -4,7 +4,6 @@ import { closeConnection, connectToDatabase } from "../db.js";
 
 const email = (process.env.CLIENT_DEMO_EMAIL || "demo@linsse.com").trim().toLowerCase();
 const password = process.env.CLIENT_DEMO_PASSWORD || "DemoCliente2026!";
-const clientId = (process.env.CLIENT_DEMO_CLIENT_ID || "").trim();
 
 function hashPassword(plainText) {
   const salt = randomBytes(16).toString("hex");
@@ -14,28 +13,19 @@ function hashPassword(plainText) {
 
 async function main() {
   const db = await connectToDatabase();
-  const client = clientId
-    ? await db.collection("clients").findOne({ _id: clientId })
-    : await db.collection("clients").findOne(
-        { $or: [{ tenant_id: null }, { tenant_id: { $exists: false } }] },
-        { sort: { created_at: -1, _id: 1 } },
-      );
-  if (!client) throw new Error(clientId ? `No existe el cliente ${clientId}.` : "No hay clientes demo disponibles.");
-
   const now = new Date();
   const result = await db.collection("users").findOneAndUpdate(
     { email },
     {
       $set: {
-        name: client.name ? `Portal de ${client.name}` : "Cliente Demo",
+        name: "Usuario Demo",
         email,
         password_hash: hashPassword(password),
-        role: "cliente",
-        client_id: client._id,
-        tenant_id: client.tenant_id ?? null,
+        role: "ejecutivo",
         status: "Activo",
         updated_at: now,
       },
+      $unset: { client_id: "", tenant_id: "" },
       $setOnInsert: { _id: randomUUID(), created_at: now },
     },
     { upsert: true, returnDocument: "after" },
@@ -46,15 +36,14 @@ async function main() {
     ok: true,
     email,
     role: result.role,
-    clientId: String(client._id),
-    clientName: client.name ?? null,
-    message: "Usuario creado/actualizado. La contraseña fue tomada de CLIENT_DEMO_PASSWORD.",
+    access: "panel general demo",
+    message: "Usuario creado/actualizado con acceso a todas las funcionalidades demo.",
   }, null, 2));
 }
 
 main()
   .catch((error) => {
-    console.error("No se pudo provisionar el usuario cliente demo:", error);
+    console.error("No se pudo provisionar el usuario demo:", error);
     process.exitCode = 1;
   })
   .finally(closeConnection);

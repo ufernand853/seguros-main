@@ -88,19 +88,19 @@ verificación posterior detecta que quedó algún dato de otro tenant. También 
 identificadores de tenant huérfanos presentes en datos operativos aunque ya no exista su
 documento en la colección `tenants`.
 
-### Usuario demo con vista de cliente
+### Usuario demo con panel general
 
-Para crear o actualizar `demo@linsse.com` como usuario de portal asociado a un único
-cliente, ejecutá el siguiente comando. Si no indicás `CLIENT_DEMO_CLIENT_ID`, se utiliza
-el cliente demo más reciente:
+Para crear o actualizar `demo@linsse.com` con acceso al panel general y todas las
+funcionalidades de la demo, ejecutá:
 
 ```bash
 CLIENT_DEMO_PASSWORD='una-clave-segura' npm run client-demo:provision
 ```
 
-El rol `cliente` entra directamente a su ficha y no ve el menú operativo. Para elegir
-otro cliente, agregá `CLIENT_DEMO_CLIENT_ID=<id>` al comando. El proceso es idempotente:
-si el correo ya existe, actualiza su asociación y contraseña.
+El usuario queda con rol `ejecutivo` y sin asociación a un cliente individual. El botón
+`Entrar en modo demo` inicia la sesión directamente con este usuario; puede deshabilitarse
+configurando `DEMO_LOGIN_ENABLED=false`. El proceso es idempotente: si el correo ya
+existe, corrige su nombre y rol, elimina asociaciones anteriores y actualiza la contraseña.
 - El frontend consume `/auth/login`; el resto de rutas sirven como base para reemplazar los mocks actuales.
 - Configurar `VITE_API_URL` si se usa un host diferente. Incluye el prefijo `/api` para que las rutas coincidan con el backend de Express.
 - Configurar `VITE_GANADERIA_URL` con una URL accesible externamente para evitar depender de `127.0.0.1`.
